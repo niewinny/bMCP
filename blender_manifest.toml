@@ -3,7 +3,7 @@ id = "bMCP"
 version = "1.0.0"
 name = "bMCP"
 tagline = "AI-powered Blender automation via Model Context Protocol"
-maintainer = "ezelar.com"
+maintainer = "ar"
 type = "add-on"
 
 
