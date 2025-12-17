@@ -111,37 +111,41 @@ def check_return_type(func: Callable, expected_type: type, strict: bool, logger:
     Returns:
         True (always - this is just a warning, not a validation failure)
     """
-    try:
-        # Use cached type hints to avoid expensive re-parsing
-        hints = get_cached_type_hints(func)
-        if "return" in hints:
-            return_type = hints["return"]
+    # First check raw annotations (doesn't require resolving forward references)
+    raw_annotations = getattr(func, "__annotations__", {})
+    if "return" not in raw_annotations:
+        logger.warning(
+            f"'{func.__name__}' has no return type annotation "
+            f"(should be '-> {expected_type.__name__}')"
+        )
+        return True
 
-            if strict:
-                # Exact match required (for resources)
+    # For strict type checking, try to resolve and compare types
+    if strict:
+        try:
+            hints = get_cached_type_hints(func)
+            if "return" in hints:
+                return_type = hints["return"]
                 if return_type != expected_type:
                     logger.warning(
                         f"'{func.__name__}' must return '{expected_type.__name__}', "
                         f"got '{return_type}'"
                     )
-            else:
-                # Allow type to contain expected (for async tools)
-                return_type_str = str(return_type)
-                if expected_type.__name__ not in return_type_str:
-                    logger.warning(
-                        f"'{func.__name__}' should return '{expected_type.__name__}', "
-                        f"got '{return_type}'"
-                    )
-        else:
+        except (NameError, AttributeError, TypeError):
+            # Forward reference resolution failed - just check string representation
+            return_annotation = raw_annotations.get("return", "")
+            if expected_type.__name__ not in str(return_annotation):
+                logger.warning(
+                    f"'{func.__name__}' should return '{expected_type.__name__}', "
+                    f"got '{return_annotation}'"
+                )
+    else:
+        # Non-strict: just check if expected type name is in the annotation string
+        return_annotation = raw_annotations.get("return", "")
+        if expected_type.__name__ not in str(return_annotation):
             logger.warning(
-                f"'{func.__name__}' has no return type annotation "
-                f"(should be '-> {expected_type.__name__}')"
+                f"'{func.__name__}' should return '{expected_type.__name__}', "
+                f"got '{return_annotation}'"
             )
-    except (NameError, AttributeError, TypeError):
-        # Type hints might not be available in all contexts
-        # NameError: ForwardRef resolution failed
-        # AttributeError: Missing attribute on type object
-        # TypeError: Invalid type expression
-        pass
 
     return True
