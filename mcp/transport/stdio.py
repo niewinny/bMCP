@@ -135,7 +135,9 @@ class HTTPConnectionPool:
 _connection_pool: Optional[HTTPConnectionPool] = None
 
 
-def forward_to_blender(message: dict, endpoint: str, retries: int = MAX_RETRIES) -> dict:
+def forward_to_blender(
+    message: dict, endpoint: str, retries: int = MAX_RETRIES
+) -> dict:
     """
     Forward a JSON-RPC message to Blender's HTTP server.
 
@@ -177,7 +179,9 @@ def forward_to_blender(message: dict, endpoint: str, retries: int = MAX_RETRIES)
 
                 # Handle HTTP 204 No Content (for notifications)
                 if status == 204:
-                    logger.debug("Received 204 No Content for: %s", message.get("method"))
+                    logger.debug(
+                        "Received 204 No Content for: %s", message.get("method")
+                    )
                     return None
 
                 # Handle HTTP errors
@@ -217,8 +221,13 @@ def forward_to_blender(message: dict, endpoint: str, retries: int = MAX_RETRIES)
             last_error = e
             if attempt < retries:
                 wait_time = 0.1 * (attempt + 1)  # 0.1s, 0.2s backoff
-                logger.debug("Connection error (attempt %d/%d), retrying in %.1fs: %s",
-                            attempt + 1, retries + 1, wait_time, e)
+                logger.debug(
+                    "Connection error (attempt %d/%d), retrying in %.1fs: %s",
+                    attempt + 1,
+                    retries + 1,
+                    wait_time,
+                    e,
+                )
                 time.sleep(wait_time)
                 continue
 
@@ -296,7 +305,10 @@ def forward_to_blender(message: dict, endpoint: str, retries: int = MAX_RETRIES)
     return {
         "jsonrpc": "2.0",
         "id": message.get("id"),
-        "error": {"code": -32603, "message": f"Request failed after {retries + 1} attempts: {last_error}"},
+        "error": {
+            "code": -32603,
+            "message": f"Request failed after {retries + 1} attempts: {last_error}",
+        },
     }
 
 

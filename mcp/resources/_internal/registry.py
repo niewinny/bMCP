@@ -80,7 +80,7 @@ def resource(func: Callable[..., Any]) -> Callable[..., Any]:
                 "Resource URI '%s' is already registered. "
                 "Each resource must have a unique URI. "
                 "The duplicate registration will be ignored.",
-                uri
+                uri,
             )
             return func
 

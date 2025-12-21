@@ -62,7 +62,9 @@ def active_scene() -> str:
         if total_count > MAX_OBJECTS:
             output += f"\n## Objects ({total_count:,} total - showing first {MAX_OBJECTS})\n\n"
             output += "**WARNING: Scene has too many objects** - showing limited data for performance.\n"
-            output += "Use `blender_run_code` tool for custom queries on large scenes.\n\n"
+            output += (
+                "Use `blender_run_code` tool for custom queries on large scenes.\n\n"
+            )
             objects = objects[:MAX_OBJECTS]
         else:
             output += f"\n## Objects ({total_count} total)\n\n"

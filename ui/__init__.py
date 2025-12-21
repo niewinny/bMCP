@@ -21,8 +21,8 @@ class BMCPMainMenu(bpy.types.Menu):
         addon_prefs = bpy.context.preferences.addons.get(base_package)
         if addon_prefs and addon_prefs.preferences:
             # Use getattr for safety in case properties don't exist
-            port = getattr(addon_prefs.preferences, 'server_port', DEFAULT_SERVER_PORT)
-            network_access = getattr(addon_prefs.preferences, 'network_access', False)
+            port = getattr(addon_prefs.preferences, "server_port", DEFAULT_SERVER_PORT)
+            network_access = getattr(addon_prefs.preferences, "network_access", False)
         else:
             port = DEFAULT_SERVER_PORT
             network_access = False
@@ -40,7 +40,9 @@ class BMCPMainMenu(bpy.types.Menu):
                 warning_col.alert = True
                 warning_col.scale_y = 0.8
                 warning_col.label(text="SECURITY WARNING", icon="ERROR")
-                warning_col.label(text="Network accessible - Code execution from network!")
+                warning_col.label(
+                    text="Network accessible - Code execution from network!"
+                )
             else:
                 col.label(text=f"SSE:  http://127.0.0.1:{port}/sse")
                 col.label(text=f"HTTP: http://127.0.0.1:{port}/http")

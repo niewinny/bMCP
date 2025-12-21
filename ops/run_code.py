@@ -23,14 +23,14 @@ class BMCP_OT_run_code(Operator):
         name="Code",
         description="Python code to execute",
         default="",
-        options={'SKIP_SAVE'},
+        options={"SKIP_SAVE"},
     )
 
     job_id: bpy.props.StringProperty(
         name="Job ID",
         description="Unique identifier for this execution",
         default="",
-        options={'SKIP_SAVE'},
+        options={"SKIP_SAVE"},
     )
 
     def execute(self, context) -> set[str]:
@@ -79,8 +79,7 @@ class BMCP_OT_run_code(Operator):
             if len(output) > MAX_OUTPUT_SIZE:
                 original_size = len(output)
                 output = (
-                    output[:MAX_OUTPUT_SIZE] +
-                    f"\n\n[OUTPUT TRUNCATED]\n"
+                    output[:MAX_OUTPUT_SIZE] + f"\n\n[OUTPUT TRUNCATED]\n"
                     f"Original size: {original_size:,} bytes\n"
                     f"Limit: {MAX_OUTPUT_SIZE:,} bytes (2MB)\n"
                     f"Truncated: {original_size - MAX_OUTPUT_SIZE:,} bytes\n"
@@ -115,4 +114,4 @@ class BMCP_OT_run_code(Operator):
                 except Exception:
                     # If restoration fails, attempt direct assignment to avoid broken console
                     if sys.__stdout__:
-                        setattr(sys, 'stdout', sys.__stdout__)
+                        setattr(sys, "stdout", sys.__stdout__)

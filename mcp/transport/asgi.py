@@ -249,7 +249,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(
-        self, app, auth_token: str, auth_required: bool = True, network_access: bool = False
+        self,
+        app,
+        auth_token: str,
+        auth_required: bool = True,
+        network_access: bool = False,
     ):
         super().__init__(app)
         self.auth_token = auth_token
@@ -530,7 +534,9 @@ async def sse_endpoint(request):
                         break
 
                 # Wait for new message or timeout (event-based, not polling)
-                has_message = await message_queue.wait_for_message(timeout=SSE_POLL_INTERVAL)
+                has_message = await message_queue.wait_for_message(
+                    timeout=SSE_POLL_INTERVAL
+                )
                 if not has_message:
                     # Timeout - send keep-alive ping
                     yield {"event": "ping", "data": ""}
@@ -691,7 +697,9 @@ def create_asgi_app(
                 AuthMiddleware,
                 auth_token=auth_token,
                 auth_required=auth_required,
-                network_access=(host == "0.0.0.0"),  # Disable query param auth in network mode
+                network_access=(
+                    host == "0.0.0.0"
+                ),  # Disable query param auth in network mode
             ),
         ],
     )

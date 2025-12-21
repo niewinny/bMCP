@@ -61,5 +61,7 @@ class BMCP_OT_stop_mcp_server(bpy.types.Operator):
             self.report({"INFO"}, "MCP Server stopped")
             return {"FINISHED"}
         else:
-            self.report({"ERROR"}, "Failed to stop MCP Server - Check console for details")
+            self.report(
+                {"ERROR"}, "Failed to stop MCP Server - Check console for details"
+            )
             return {"CANCELLED"}

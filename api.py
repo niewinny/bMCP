@@ -22,7 +22,9 @@ def tool(*args, **kwargs):
             '''My tool description.'''
             return f"Result: {arg}"
     """
-    return import_module(f"{__package__}.mcp.tools._internal.registry").tool(*args, **kwargs)
+    return import_module(f"{__package__}.mcp.tools._internal.registry").tool(
+        *args, **kwargs
+    )
 
 
 def resource(*args, **kwargs):
@@ -76,7 +78,9 @@ def iter_tools():
 
 def iter_resources():
     """Return all registered resources."""
-    return import_module(f"{__package__}.mcp.resources._internal.registry").iter_resources()
+    return import_module(
+        f"{__package__}.mcp.resources._internal.registry"
+    ).iter_resources()
 
 
 def iter_prompts():

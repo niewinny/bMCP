@@ -88,19 +88,27 @@ def selected_shaders() -> str:
             output += f"**Blend Mode**: {active_material.blend_method}\n"
             output += f"**Shadow Mode**: {active_material.shadow_method}\n"
             if active_material.blend_method in ["BLEND", "HASHED"]:
-                output += f"**Show Backface**: {active_material.show_transparent_back}\n"
+                output += (
+                    f"**Show Backface**: {active_material.show_transparent_back}\n"
+                )
             output += "\n"
 
             # Socket compatibility guide
             output += "## Socket Type Guide\n\n"
-            output += "**Connection Rules**: Sockets connect based on type compatibility:\n"
+            output += (
+                "**Connection Rules**: Sockets connect based on type compatibility:\n"
+            )
             for sock_type, desc in SOCKET_COMPAT.items():
                 output += f"- **{sock_type}**: {desc}\n"
             output += "\n**Common Patterns**:\n"
             output += "- Texturing: `Texture Coordinate → Mapping → Image Texture → Principled BSDF`\n"
-            output += "- Normal Maps: `Image Texture → Normal Map → Shader Normal input`\n"
+            output += (
+                "- Normal Maps: `Image Texture → Normal Map → Shader Normal input`\n"
+            )
             output += "- Mixing Shaders: `Noise/Image → ColorRamp → Mix Shader Fac`\n"
-            output += "- Procedural Variation: `Noise → ColorRamp → Roughness/Metallic`\n\n"
+            output += (
+                "- Procedural Variation: `Noise → ColorRamp → Roughness/Metallic`\n\n"
+            )
 
             # Get all nodes
             all_nodes = list(node_tree.nodes)
@@ -110,7 +118,9 @@ def selected_shaders() -> str:
             output += "## Shader Tree Overview\n\n"
             output += f"- **Total Nodes**: {len(all_nodes)}\n"
             output += f"- **Selected Nodes**: {len(selected_nodes)}\n"
-            output += f"- **Active Node**: {active_node.name if active_node else 'None'}\n"
+            output += (
+                f"- **Active Node**: {active_node.name if active_node else 'None'}\n"
+            )
             output += f"- **Links**: {len(node_tree.links)}\n\n"
 
             # Node type statistics with purposes
@@ -140,17 +150,13 @@ def selected_shaders() -> str:
                     surface = out_node.inputs.get("Surface")
                     if surface and surface.is_linked and surface.links:
                         link = surface.links[0]
-                        output += (
-                            f"  - Surface ← {link.from_node.name} ({link.from_node.type})\n"
-                        )
+                        output += f"  - Surface ← {link.from_node.name} ({link.from_node.type})\n"
 
                     # Volume input
                     volume = out_node.inputs.get("Volume")
                     if volume and volume.is_linked and volume.links:
                         link = volume.links[0]
-                        output += (
-                            f"  - Volume ← {link.from_node.name} ({link.from_node.type})\n"
-                        )
+                        output += f"  - Volume ← {link.from_node.name} ({link.from_node.type})\n"
 
                     # Displacement input
                     displacement = out_node.inputs.get("Displacement")
@@ -188,11 +194,11 @@ def selected_shaders() -> str:
                             if inp:
                                 if inp.is_linked and inp.links:
                                     link = inp.links[0]
-                                    output += f"  - {input_name}: ← {link.from_node.name}\n"
-                                else:
                                     output += (
-                                        f"  - {input_name}: {format_socket_value(inp)}\n"
+                                        f"  - {input_name}: ← {link.from_node.name}\n"
                                     )
+                                else:
+                                    output += f"  - {input_name}: {format_socket_value(inp)}\n"
 
                 output += "\n"
 
@@ -212,9 +218,14 @@ def selected_shaders() -> str:
                     if tex.type == "TEX_IMAGE":
                         if tex.image:
                             output += f"  - Image: {tex.image.name}\n"
-                            output += f"  - Size: {tex.image.size[0]}x{tex.image.size[1]}\n"
+                            output += (
+                                f"  - Size: {tex.image.size[0]}x{tex.image.size[1]}\n"
+                            )
                             # colorspace_settings may not exist on all image types
-                            if hasattr(tex.image, 'colorspace_settings') and tex.image.colorspace_settings:
+                            if (
+                                hasattr(tex.image, "colorspace_settings")
+                                and tex.image.colorspace_settings
+                            ):
                                 output += f"  - Color Space: {tex.image.colorspace_settings.name}\n"
                         else:
                             output += "  - Image: (none)\n"
@@ -227,16 +238,14 @@ def selected_shaders() -> str:
             if active_node:
                 output += f"## Active Node: {active_node.name}\n\n"
                 output += f"- **Type**: {active_node.type}\n"
-                output += (
-                    f"- **Label**: {active_node.label if active_node.label else '(none)'}\n"
-                )
+                output += f"- **Label**: {active_node.label if active_node.label else '(none)'}\n"
                 output += f"- **Location**: ({active_node.location.x:.1f}, {active_node.location.y:.1f})\n"
 
                 if hasattr(active_node, "mute") and active_node.mute:
                     output += "- **Muted**: Yes\n"
 
                 # Node group reference
-                if active_node.type == "GROUP" and hasattr(active_node, 'node_tree'):
+                if active_node.type == "GROUP" and hasattr(active_node, "node_tree"):
                     if active_node.node_tree:
                         output += f"- **Node Group**: {active_node.node_tree.name}\n"
 
@@ -282,9 +291,7 @@ def selected_shaders() -> str:
                         output += f"  - {inp.name} ({inp.type}): {link_status}\n"
                         if inp.is_linked:
                             for link in inp.links:
-                                output += (
-                                    f"    ← {link.from_node.name}.{link.from_socket.name}\n"
-                                )
+                                output += f"    ← {link.from_node.name}.{link.from_socket.name}\n"
 
                 # Outputs
                 if active_node.outputs:
@@ -320,7 +327,9 @@ def selected_shaders() -> str:
                     output += "\n"
 
                 if len(other_selected) > 8:
-                    output += f"... and {len(other_selected) - 8} more selected nodes\n\n"
+                    output += (
+                        f"... and {len(other_selected) - 8} more selected nodes\n\n"
+                    )
 
             # Node groups used
             node_groups_used = [n for n in all_nodes if n.type == "GROUP"]

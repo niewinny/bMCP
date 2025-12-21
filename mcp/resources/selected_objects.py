@@ -20,11 +20,14 @@ def selected_objects() -> str:
     Returns comprehensive information about selected objects.
     """
     try:
+
         def _format_object_info(obj):
             info = ""
             info += f"- **Type**: {obj.type}\n"
             info += f"- **Location**: {[round(x, 3) for x in obj.location]}\n"
-            info += f"- **Rotation** (Euler): {[round(x, 3) for x in obj.rotation_euler]}\n"
+            info += (
+                f"- **Rotation** (Euler): {[round(x, 3) for x in obj.rotation_euler]}\n"
+            )
             info += f"- **Scale**: {[round(x, 3) for x in obj.scale]}\n"
             info += f"- **Dimensions**: {[round(x, 3) for x in obj.dimensions]}\n"
 
@@ -68,7 +71,7 @@ def selected_objects() -> str:
                 info += f"- Clip Start: {cam.clip_start}\n"
                 info += f"- Clip End: {cam.clip_end}\n"
                 # DOF may not exist on all camera types/versions
-                if hasattr(cam, 'dof') and cam.dof and hasattr(cam.dof, 'focus_object'):
+                if hasattr(cam, "dof") and cam.dof and hasattr(cam.dof, "focus_object"):
                     focus_obj = cam.dof.focus_object
                     info += f"- DOF Object: {focus_obj.name if focus_obj else 'None'}\n"
 
@@ -156,7 +159,10 @@ def selected_objects() -> str:
         mode = bpy.context.mode
 
         if not selected:
-            return "# Selected Objects\n\nNo objects currently selected.\n\n**Current Mode**: " + mode
+            return (
+                "# Selected Objects\n\nNo objects currently selected.\n\n**Current Mode**: "
+                + mode
+            )
 
         # Check for too many selected objects
         total_selected = len(selected)

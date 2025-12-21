@@ -64,7 +64,9 @@ def validate_callable(func: Any, decorator_name: str, logger: logging.Logger) ->
     return True
 
 
-def validate_has_name(func: Callable, decorator_name: str, logger: logging.Logger) -> bool:
+def validate_has_name(
+    func: Callable, decorator_name: str, logger: logging.Logger
+) -> bool:
     """
     Validate that function has __name__ attribute.
 
@@ -77,7 +79,9 @@ def validate_has_name(func: Callable, decorator_name: str, logger: logging.Logge
         True if valid, False otherwise
     """
     if not hasattr(func, "__name__"):
-        logger.error("@%s decorator requires function to have __name__ attribute", decorator_name)
+        logger.error(
+            "@%s decorator requires function to have __name__ attribute", decorator_name
+        )
         return False
     return True
 
@@ -94,11 +98,15 @@ def check_docstring(func: Callable, logger: logging.Logger) -> bool:
         True (always - this is just a warning, not a validation failure)
     """
     if not func.__doc__:
-        logger.warning("'%s' has no docstring - description will be empty", func.__name__)
+        logger.warning(
+            "'%s' has no docstring - description will be empty", func.__name__
+        )
     return True
 
 
-def check_return_type(func: Callable, expected_type: type, strict: bool, logger: logging.Logger) -> bool:
+def check_return_type(
+    func: Callable, expected_type: type, strict: bool, logger: logging.Logger
+) -> bool:
     """
     Check if function has correct return type annotation.
 

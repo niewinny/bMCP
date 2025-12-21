@@ -62,7 +62,9 @@ async def blender_run_code(ctx: "ToolContext", code: str) -> str:
     if ctx.is_http_mode:
         # HTTP mode: result is dict from operator
         if not isinstance(result, dict):
-            raise RuntimeError(f"Expected dict result in HTTP mode, got {type(result).__name__}")
+            raise RuntimeError(
+                f"Expected dict result in HTTP mode, got {type(result).__name__}"
+            )
 
         if result.get("status") == "error":
             error_msg = result.get("error", "Tool execution failed")

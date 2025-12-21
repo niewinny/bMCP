@@ -60,7 +60,9 @@ class ConfigValidationResult:
         return self.valid
 
 
-def validate_port(port: int, host: str, use_cache: bool = True) -> Tuple[bool, Optional[str]]:
+def validate_port(
+    port: int, host: str, use_cache: bool = True
+) -> Tuple[bool, Optional[str]]:
     """
     Validate port number and check availability.
 
@@ -98,7 +100,7 @@ def validate_port(port: int, host: str, use_cache: bool = True) -> Tuple[bool, O
         _port_validation_cache[cache_key] = True
     except socket.error as e:
         # Safely get errno - may not exist on all platforms/error types
-        errno_val = getattr(e, 'errno', None)
+        errno_val = getattr(e, "errno", None)
         if errno_val in (98, 10048):  # Address already in use (Linux/Windows)
             # Don't cache "in use" - port might become available
             return False, f"Port {port} is already in use"
@@ -151,9 +153,7 @@ def validate_config(
         if not auth_required or not auth_token:
             errors.append("Network access requires authentication with a token")
         else:
-            warnings.append(
-                "Network access enabled - server accessible from 0.0.0.0"
-            )
+            warnings.append("Network access enabled - server accessible from 0.0.0.0")
 
     return ConfigValidationResult(
         valid=len(errors) == 0, errors=errors, warnings=warnings

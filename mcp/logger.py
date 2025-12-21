@@ -110,8 +110,8 @@ class RequestTimer:
         self.logger = logger
         self.operation = operation
         self.log_start = log_start
-        self.start_time = None
-        self.duration_ms = None
+        self.start_time: float | None = None
+        self.duration_ms: float | None = None
 
     def __enter__(self):
         self.start_time = time.perf_counter()
@@ -120,6 +120,8 @@ class RequestTimer:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.start_time is None:
+            return False
         self.duration_ms = (time.perf_counter() - self.start_time) * 1000
 
         if exc_type:
@@ -131,6 +133,8 @@ class RequestTimer:
                 exc_val,
             )
         else:
-            self.logger.debug("%s completed in %.2fms", self.operation, self.duration_ms)
+            self.logger.debug(
+                "%s completed in %.2fms", self.operation, self.duration_ms
+            )
 
         return False  # Don't suppress exceptions

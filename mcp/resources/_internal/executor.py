@@ -28,7 +28,6 @@ import threading
 import time
 import uuid
 from collections import OrderedDict
-from typing import Optional
 
 import bpy
 
@@ -36,7 +35,6 @@ from ...logger import get_logger
 from ...utils.config import (
     MAX_PENDING_OPERATIONS,
     RESOURCE_EXECUTION_TIMEOUT,
-    RESOURCE_POLL_INTERVAL,
     STALE_PROPERTY_AGE,
 )
 
@@ -48,14 +46,16 @@ _pending_operations: OrderedDict[str, dict] = OrderedDict()
 _pending_lock = threading.Lock()  # Use threading.Lock for thread-safe access
 
 # Track property keys for cleanup
-_RESOURCE_PROPERTY_PREFIXES = ("mcp_resource_data_", "mcp_resource_done_", "mcp_resource_error_")
+_RESOURCE_PROPERTY_PREFIXES = (
+    "mcp_resource_data_",
+    "mcp_resource_done_",
+    "mcp_resource_error_",
+)
 _CODE_PROPERTY_PREFIX = "mcp_result_"
 
 
 def _register_pending(
-    job_id: str,
-    event: asyncio.Event,
-    loop: asyncio.AbstractEventLoop
+    job_id: str, event: asyncio.Event, loop: asyncio.AbstractEventLoop
 ) -> None:
     """Register a new pending operation, cancelling and REMOVING oldest if at limit.
 
@@ -88,7 +88,10 @@ def _register_pending(
             logger.warning(
                 "Operation %s cancelled (queue full, max=%d, age=%.1fs). "
                 "New operation %s taking its place.",
-                oldest_id[:8], MAX_PENDING_OPERATIONS, age, job_id[:8]
+                oldest_id[:8],
+                MAX_PENDING_OPERATIONS,
+                age,
+                job_id[:8],
             )
 
             # Schedule cleanup of any orphaned properties for the cancelled operation
@@ -162,6 +165,7 @@ def _schedule_property_cleanup_for_job(job_id: str) -> None:
     This is called when an operation is cancelled to clean up any orphaned properties.
     Runs on Blender's main thread via timer.
     """
+
     def cleanup():
         try:
             wm = bpy.context.window_manager
@@ -200,7 +204,7 @@ def _cleanup_properties_immediately(wm, keys: tuple) -> None:
             logger.debug("Failed to delete property %s: %s", key, e)
 
 
-def cleanup_stale_properties(max_age: float = None) -> int:
+def cleanup_stale_properties(max_age: float | None = None) -> int:
     """
     Clean up stale window_manager properties from crashed/abandoned operations.
 
@@ -226,7 +230,9 @@ def cleanup_stale_properties(max_age: float = None) -> int:
 
         # Find all MCP-related properties
         for key in list(wm.keys()):
-            is_resource_prop = any(key.startswith(prefix) for prefix in _RESOURCE_PROPERTY_PREFIXES)
+            is_resource_prop = any(
+                key.startswith(prefix) for prefix in _RESOURCE_PROPERTY_PREFIXES
+            )
             is_code_prop = key.startswith(_CODE_PROPERTY_PREFIX)
 
             if is_resource_prop or is_code_prop:
@@ -250,7 +256,7 @@ def cleanup_stale_properties(max_age: float = None) -> int:
         return 0
 
 
-async def execute_resource(uri: str, timeout: float = None) -> str:
+async def execute_resource(uri: str, timeout: float | None = None) -> str:
     """
     Execute a resource by URI on Blender's main thread and wait for result.
 
@@ -354,5 +360,3 @@ async def execute_resource(uri: str, timeout: float = None) -> str:
     finally:
         # Always unregister from pending operations
         _unregister_pending(job_id)
-
-

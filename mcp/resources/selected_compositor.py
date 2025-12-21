@@ -62,9 +62,7 @@ def selected_compositor() -> str:
             output += f"**Scene**: {scene.name}\n"
 
             # Render settings context
-            output += (
-                f"**Resolution**: {scene.render.resolution_x}x{scene.render.resolution_y}\n"
-            )
+            output += f"**Resolution**: {scene.render.resolution_x}x{scene.render.resolution_y}\n"
             output += f"**Frame Range**: {scene.frame_start} - {scene.frame_end}\n"
             output += f"**Current Frame**: {scene.frame_current}\n\n"
 
@@ -78,12 +76,8 @@ def selected_compositor() -> str:
             output += (
                 "- Glow Effect: `Image → Blur → Glare → Mix (Add mode) with original`\n"
             )
-            output += (
-                "- Depth of Field: `Render Layers → Blur (size from Depth) → Composite`\n"
-            )
-            output += (
-                "- Masking: `ID Mask → ColorRamp → Mix RGB Fac (to isolate objects)`\n\n"
-            )
+            output += "- Depth of Field: `Render Layers → Blur (size from Depth) → Composite`\n"
+            output += "- Masking: `ID Mask → ColorRamp → Mix RGB Fac (to isolate objects)`\n\n"
 
             # Get all nodes
             all_nodes = list(node_tree.nodes)
@@ -93,7 +87,9 @@ def selected_compositor() -> str:
             output += "## Compositor Overview\n\n"
             output += f"- **Total Nodes**: {len(all_nodes)}\n"
             output += f"- **Selected Nodes**: {len(selected_nodes)}\n"
-            output += f"- **Active Node**: {active_node.name if active_node else 'None'}\n"
+            output += (
+                f"- **Active Node**: {active_node.name if active_node else 'None'}\n"
+            )
             output += f"- **Links**: {len(node_tree.links)}\n\n"
 
             # Node type statistics with purposes
@@ -146,17 +142,13 @@ def selected_compositor() -> str:
                     image_input = comp_node.inputs.get("Image")
                     if image_input and image_input.is_linked and image_input.links:
                         link = image_input.links[0]
-                        output += (
-                            f"  - Image ← {link.from_node.name}.{link.from_socket.name}\n"
-                        )
+                        output += f"  - Image ← {link.from_node.name}.{link.from_socket.name}\n"
 
                     # Alpha input
                     alpha_input = comp_node.inputs.get("Alpha")
                     if alpha_input and alpha_input.is_linked and alpha_input.links:
                         link = alpha_input.links[0]
-                        output += (
-                            f"  - Alpha ← {link.from_node.name}.{link.from_socket.name}\n"
-                        )
+                        output += f"  - Alpha ← {link.from_node.name}.{link.from_socket.name}\n"
 
                 output += "\n"
 
@@ -175,9 +167,7 @@ def selected_compositor() -> str:
                     image_input = viewer.inputs.get("Image")
                     if image_input and image_input.is_linked and image_input.links:
                         link = image_input.links[0]
-                        output += (
-                            f"  - Viewing: {link.from_node.name}.{link.from_socket.name}\n"
-                        )
+                        output += f"  - Viewing: {link.from_node.name}.{link.from_socket.name}\n"
 
                 output += "\n"
 
@@ -205,9 +195,7 @@ def selected_compositor() -> str:
             if active_node:
                 output += f"## Active Node: {active_node.name}\n\n"
                 output += f"- **Type**: {active_node.type}\n"
-                output += (
-                    f"- **Label**: {active_node.label if active_node.label else '(none)'}\n"
-                )
+                output += f"- **Label**: {active_node.label if active_node.label else '(none)'}\n"
                 output += f"- **Location**: ({active_node.location.x:.1f}, {active_node.location.y:.1f})\n"
 
                 if hasattr(active_node, "mute") and active_node.mute:
@@ -275,9 +263,7 @@ def selected_compositor() -> str:
                         output += f"  - {inp.name} ({inp.type}): {link_status}\n"
                         if inp.is_linked:
                             for link in inp.links:
-                                output += (
-                                    f"    ← {link.from_node.name}.{link.from_socket.name}\n"
-                                )
+                                output += f"    ← {link.from_node.name}.{link.from_socket.name}\n"
 
                 # Outputs
                 if active_node.outputs:
@@ -313,7 +299,9 @@ def selected_compositor() -> str:
                     output += "\n"
 
                 if len(other_selected) > 8:
-                    output += f"... and {len(other_selected) - 8} more selected nodes\n\n"
+                    output += (
+                        f"... and {len(other_selected) - 8} more selected nodes\n\n"
+                    )
 
             # Node groups used
             node_groups_used = [n for n in all_nodes if n.type == "GROUP"]

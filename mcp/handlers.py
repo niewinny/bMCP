@@ -92,7 +92,9 @@ async def handle_tools_call(mcp_server, params: dict) -> dict:
     arguments = params.get("arguments", {})
 
     if not tool_name or not isinstance(tool_name, str) or not tool_name.strip():
-        raise ValueError(f"Tool name is required and cannot be empty (received: {type(tool_name).__name__})")
+        raise ValueError(
+            f"Tool name is required and cannot be empty (received: {type(tool_name).__name__})"
+        )
 
     logger.info("Tool call: %s", tool_name)
 
@@ -105,14 +107,17 @@ async def handle_tools_call(mcp_server, params: dict) -> dict:
             if len(result_str) > OUTPUT_SIZE_LIMIT:
                 original_size = len(result_str)
                 result_str = (
-                    result_str[:OUTPUT_SIZE_LIMIT] +
-                    f"\n\n[OUTPUT TRUNCATED]\n"
+                    result_str[:OUTPUT_SIZE_LIMIT] + f"\n\n[OUTPUT TRUNCATED]\n"
                     f"Original size: {original_size:,} bytes\n"
                     f"Limit: {OUTPUT_SIZE_LIMIT:,} bytes\n"
                     f"Truncated: {original_size - OUTPUT_SIZE_LIMIT:,} bytes"
                 )
-                logger.warning("Tool %s output truncated: %d -> %d bytes",
-                             tool_name, original_size, OUTPUT_SIZE_LIMIT)
+                logger.warning(
+                    "Tool %s output truncated: %d -> %d bytes",
+                    tool_name,
+                    original_size,
+                    OUTPUT_SIZE_LIMIT,
+                )
 
             # Format result according to MCP spec
             return {"content": [{"type": "text", "text": result_str}]}
@@ -167,7 +172,9 @@ async def handle_resources_read(mcp_server, params: dict) -> dict:
     uri = params.get("uri")
 
     if not uri or not isinstance(uri, str) or not uri.strip():
-        raise ValueError(f"Resource URI is required and cannot be empty (received: {type(uri).__name__})")
+        raise ValueError(
+            f"Resource URI is required and cannot be empty (received: {type(uri).__name__})"
+        )
 
     logger.info("Resource read: %s", uri)
 
@@ -186,7 +193,9 @@ async def handle_resources_read(mcp_server, params: dict) -> dict:
 
             # Re-raise the exception - let the transport layer handle it
             # as a proper JSON-RPC error response
-            raise RuntimeError(f"Resource read failed: {type(e).__name__}: {str(e)}") from e
+            raise RuntimeError(
+                f"Resource read failed: {type(e).__name__}: {str(e)}"
+            ) from e
 
 
 async def handle_prompts_list(mcp_server, params: Optional[dict] = None) -> dict:
@@ -242,7 +251,9 @@ async def handle_prompts_get(mcp_server, params: dict) -> dict:
             ) from e
 
 
-async def handle_notifications_initialized(mcp_server, params: Optional[dict] = None) -> None:
+async def handle_notifications_initialized(
+    mcp_server, params: Optional[dict] = None
+) -> None:
     """
     Handle notifications/initialized notification.
 
@@ -260,7 +271,9 @@ async def handle_notifications_initialized(mcp_server, params: Optional[dict] = 
     return None
 
 
-async def handle_notifications_cancelled(mcp_server, params: Optional[dict] = None) -> None:
+async def handle_notifications_cancelled(
+    mcp_server, params: Optional[dict] = None
+) -> None:
     """
     Handle notifications/cancelled notification.
 
@@ -293,7 +306,9 @@ METHOD_HANDLERS = {
 }
 
 
-async def dispatch_request(mcp_server, method: str, params: Optional[dict] = None) -> Any:
+async def dispatch_request(
+    mcp_server, method: str, params: Optional[dict] = None
+) -> Any:
     """
     Dispatch an MCP request to the appropriate handler.
 

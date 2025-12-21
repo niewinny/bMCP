@@ -226,12 +226,12 @@ class BMCP_OT_CopyConfig(bpy.types.Operator):
     config_text: bpy.props.StringProperty(
         name="Config Text",
         description="Configuration text to copy",
-        options={'SKIP_SAVE'},
+        options={"SKIP_SAVE"},
     )
     config_type: bpy.props.StringProperty(
         name="Config Type",
         description="Type of configuration being copied",
-        options={'SKIP_SAVE'},
+        options={"SKIP_SAVE"},
     )
 
     def execute(self, context):

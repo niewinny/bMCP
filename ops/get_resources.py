@@ -24,14 +24,14 @@ class BMCP_OT_get_resources(bpy.types.Operator):
         name="URI",
         description="Resource URI to read (e.g., blender://active_scene)",
         default="",
-        options={'SKIP_SAVE'},
+        options={"SKIP_SAVE"},
     )
 
     job_id: bpy.props.StringProperty(
         name="Job ID",
         description="Unique identifier for this execution",
         default="",
-        options={'SKIP_SAVE'},
+        options={"SKIP_SAVE"},
     )
 
     def execute(self, context) -> set[str]:
@@ -75,8 +75,7 @@ class BMCP_OT_get_resources(bpy.types.Operator):
             if len(result) > MAX_OUTPUT_SIZE:
                 original_size = len(result)
                 result = (
-                    result[:MAX_OUTPUT_SIZE] +
-                    f"\n\n[OUTPUT TRUNCATED]\n"
+                    result[:MAX_OUTPUT_SIZE] + f"\n\n[OUTPUT TRUNCATED]\n"
                     f"Original size: {original_size:,} bytes\n"
                     f"Limit: {MAX_OUTPUT_SIZE:,} bytes (2MB)\n"
                     f"Truncated: {original_size - MAX_OUTPUT_SIZE:,} bytes"

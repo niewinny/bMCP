@@ -85,7 +85,9 @@ def selected_geometry_nodes() -> str:
             output += "- Scattering: `Grid → Mesh to Points → Instance on Points (with objects)`\n"
             output += "- Displacement: `Grid → Set Position (Offset = Noise Texture)`\n"
             output += "- Randomization: `Random Value → Scale/Rotation of instances`\n"
-            output += "- Selection: `BOOLEAN field → Selection input (True = affected)`\n\n"
+            output += (
+                "- Selection: `BOOLEAN field → Selection input (True = affected)`\n\n"
+            )
 
             # Get all nodes
             all_nodes = list(node_tree.nodes)
@@ -95,7 +97,9 @@ def selected_geometry_nodes() -> str:
             output += "## Node Group Overview\n\n"
             output += f"- **Total Nodes**: {len(all_nodes)}\n"
             output += f"- **Selected Nodes**: {len(selected_nodes)}\n"
-            output += f"- **Active Node**: {active_node.name if active_node else 'None'}\n"
+            output += (
+                f"- **Active Node**: {active_node.name if active_node else 'None'}\n"
+            )
             output += f"- **Links**: {len(node_tree.links)}\n\n"
 
             # Node type statistics with purposes
@@ -144,9 +148,7 @@ def selected_geometry_nodes() -> str:
             if active_node:
                 output += f"## Active Node: {active_node.name}\n\n"
                 output += f"- **Type**: {active_node.type}\n"
-                output += (
-                    f"- **Label**: {active_node.label if active_node.label else '(none)'}\n"
-                )
+                output += f"- **Label**: {active_node.label if active_node.label else '(none)'}\n"
                 output += f"- **Location**: ({active_node.location.x:.1f}, {active_node.location.y:.1f})\n"
 
                 if hasattr(active_node, "mute") and active_node.mute:
@@ -155,9 +157,7 @@ def selected_geometry_nodes() -> str:
                 # Node group reference
                 if active_node.type == "GROUP":
                     if active_node.node_tree:
-                        output += (
-                            f"- **References Node Group**: {active_node.node_tree.name}\n"
-                        )
+                        output += f"- **References Node Group**: {active_node.node_tree.name}\n"
 
                 # Inputs
                 if active_node.inputs:
@@ -180,14 +180,10 @@ def selected_geometry_nodes() -> str:
                     for out in active_node.outputs:
                         if out.name != "":
                             link_count = len(out.links)
-                            output += (
-                                f"  - {out.name} ({out.type}): {link_count} connection(s)\n"
-                            )
+                            output += f"  - {out.name} ({out.type}): {link_count} connection(s)\n"
                             if out.is_linked and out.links:
                                 for link in out.links[:3]:  # First 3
-                                    output += (
-                                        f"    → {link.to_node.name}.{link.to_socket.name}\n"
-                                    )
+                                    output += f"    → {link.to_node.name}.{link.to_socket.name}\n"
                                 if link_count > 3:
                                     output += f"    ... and {link_count - 3} more\n"
 
@@ -220,7 +216,9 @@ def selected_geometry_nodes() -> str:
                     output += "\n"
 
                 if len(other_selected) > 8:
-                    output += f"... and {len(other_selected) - 8} more selected nodes\n\n"
+                    output += (
+                        f"... and {len(other_selected) - 8} more selected nodes\n\n"
+                    )
 
             # Node groups used in tree
             node_groups_used = [n for n in all_nodes if n.type == "GROUP"]

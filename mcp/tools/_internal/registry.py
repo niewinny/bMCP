@@ -87,7 +87,7 @@ def tool(func: Callable[..., Any]) -> Callable[..., Any]:
                 "Tool name '%s' is already registered. "
                 "Each tool must have a unique name. "
                 "The duplicate registration will be ignored.",
-                tool_name
+                tool_name,
             )
             # Return the function without registering to allow graceful degradation
             return func

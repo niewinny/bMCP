@@ -73,7 +73,9 @@ class MCPServer:
         self._resource_cache.clear()
 
         for reg in iter_resources():
-            resource_name = reg.name or getattr(reg.handler, "__name__", reg.uri.split("/")[-1])
+            resource_name = reg.name or getattr(
+                reg.handler, "__name__", reg.uri.split("/")[-1]
+            )
             resource_name = resource_name.replace("_", " ").title()
             resource_desc = reg.description or (reg.handler.__doc__ or "").strip()
 
@@ -141,7 +143,7 @@ class MCPServer:
             func_name = getattr(func, "__name__", str(func))
             logger.debug(
                 "No type hints available for %s. Schema will use default types.",
-                func_name
+                func_name,
             )
 
         properties = {}
@@ -243,10 +245,7 @@ class MCPServer:
                 # Optional[X] case - include null type in anyOf for MCP client compatibility
                 # This properly represents Optional[str] as anyOf: [{type: string}, {type: null}]
                 return {
-                    "anyOf": [
-                        self._type_to_schema(non_none_types[0]),
-                        {"type": "null"}
-                    ]
+                    "anyOf": [self._type_to_schema(non_none_types[0]), {"type": "null"}]
                 }
             else:
                 # Multiple non-None types: use anyOf schema
@@ -268,7 +267,7 @@ class MCPServer:
                 # Dict[str, X] - additionalProperties pattern
                 return {
                     "type": "object",
-                    "additionalProperties": self._type_to_schema(args[1])
+                    "additionalProperties": self._type_to_schema(args[1]),
                 }
             return {"type": "object"}
 
@@ -280,7 +279,7 @@ class MCPServer:
                     "type": "array",
                     "items": [self._type_to_schema(t) for t in args],
                     "minItems": len(args),
-                    "maxItems": len(args)
+                    "maxItems": len(args),
                 }
             return {"type": "array"}
 

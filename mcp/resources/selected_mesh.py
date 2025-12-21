@@ -59,7 +59,9 @@ def selected_mesh() -> str:
                 output += "\n## Edit Mode Selection\n\n"
                 output += f"**WARNING: Mesh Too Large** - {len(mesh.vertices):,} vertices (limit: {MAX_VERTICES:,})\n\n"
                 output += "Detailed edit mode info disabled for performance.\n"
-                output += "Use `blender_run_code` tool for custom queries on large meshes.\n"
+                output += (
+                    "Use `blender_run_code` tool for custom queries on large meshes.\n"
+                )
             else:
                 # Create BMesh once and reuse for all edit mode operations
                 bm = bmesh.from_edit_mesh(mesh)
@@ -76,11 +78,13 @@ def selected_mesh() -> str:
                 selected_verts = [v for v in bm.verts if v.select]
                 selected_edges = [e for e in bm.edges if e.select]
                 selected_faces = [f for f in bm.faces if f.select]
+                output += f"- **Selected Vertices**: {len(selected_verts)} / {len(bm.verts)}\n"
                 output += (
-                    f"- **Selected Vertices**: {len(selected_verts)} / {len(bm.verts)}\n"
+                    f"- **Selected Edges**: {len(selected_edges)} / {len(bm.edges)}\n"
                 )
-                output += f"- **Selected Edges**: {len(selected_edges)} / {len(bm.edges)}\n"
-                output += f"- **Selected Faces**: {len(selected_faces)} / {len(bm.faces)}\n"
+                output += (
+                    f"- **Selected Faces**: {len(selected_faces)} / {len(bm.faces)}\n"
+                )
 
                 # Extract active element once to avoid AttributeError
                 active_elem = bm.select_history.active
@@ -90,7 +94,9 @@ def selected_mesh() -> str:
                     output += "- **Active Vertex**: None\n"
 
                 if active_elem and isinstance(active_elem, bmesh.types.BMEdge):
-                    output += f"- **Active Edge**: {[v.index for v in active_elem.verts]}\n"
+                    output += (
+                        f"- **Active Edge**: {[v.index for v in active_elem.verts]}\n"
+                    )
                 else:
                     output += "- **Active Edge**: None\n"
 
@@ -155,9 +161,11 @@ def selected_mesh() -> str:
             output += f"\n## Shape Keys ({len(mesh.shape_keys.key_blocks)})\n\n"
             output += f"- **Use Relative**: {mesh.shape_keys.use_relative}\n"
             # Get active shape key safely (may not exist)
-            active_shape_key = getattr(obj, 'active_shape_key', None)
+            active_shape_key = getattr(obj, "active_shape_key", None)
             for i, key in enumerate(mesh.shape_keys.key_blocks):
-                marker = "**ACTIVE**" if active_shape_key and key == active_shape_key else ""
+                marker = (
+                    "**ACTIVE**" if active_shape_key and key == active_shape_key else ""
+                )
                 output += f"{i + 1}. {key.name} - Value: {key.value:.3f}"
                 if key.mute:
                     output += " [Muted]"
