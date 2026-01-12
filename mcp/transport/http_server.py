@@ -244,7 +244,7 @@ class ServerManager:
         Get server configuration from preferences.
 
         Returns:
-            tuple: (network_access, port, enable_logs)
+            tuple: (network_access, port, enable_logs, auth_token, auth_required)
         """
         addon_prefs = bpy.context.preferences.addons.get(base_package)
         if addon_prefs:
@@ -260,7 +260,7 @@ class ServerManager:
             auth_token = ""
             auth_required = False
 
-        return network_access, port, enable_logs, auth_token, auth_required
+        return (network_access, port, enable_logs, auth_token, auth_required)
 
     def _setup_logging(self, enable_logs):
         """
@@ -463,7 +463,7 @@ class ServerManager:
 
         try:
             # Get configuration from preferences
-            network_access, port, enable_logs, auth_token, auth_required = (
+            (network_access, port, enable_logs, auth_token, auth_required) = (
                 self._get_server_config()
             )
             bind_address = "0.0.0.0" if network_access else "127.0.0.1"
@@ -495,7 +495,12 @@ class ServerManager:
 
             # Create and configure uvicorn server
             self._uvicorn_server = self._create_uvicorn_server(
-                mcp, bind_address, port, enable_logs, auth_token, auth_required
+                mcp,
+                bind_address,
+                port,
+                enable_logs,
+                auth_token,
+                auth_required,
             )
 
             # Start background event loop

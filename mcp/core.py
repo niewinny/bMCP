@@ -16,6 +16,24 @@ from .utils.validators import get_cached_type_hints
 # Get logger for this module
 logger = get_logger("bmcp-core")
 
+# =============================================================================
+# TYPE MAPPING TABLES - Used by schema generation
+# =============================================================================
+_BASIC_TYPE_MAP: dict[type, str] = {
+    str: "string",
+    int: "integer",
+    float: "number",
+    bool: "boolean",
+    type(None): "null",
+}
+
+_BASIC_TYPE_STR_MAP: dict[str, str] = {
+    "str": "string",
+    "int": "integer",
+    "float": "number",
+    "bool": "boolean",
+}
+
 
 class MCPServer:
     """
@@ -192,99 +210,83 @@ class MCPServer:
         Returns:
             dict: JSON Schema type definition
         """
-        # Handle None/NoneType
-        if python_type is type(None):
-            return {"type": "null"}
+        # Handle basic types via lookup table
+        if python_type in _BASIC_TYPE_MAP:
+            return {"type": _BASIC_TYPE_MAP[python_type]}
 
-        # Handle basic types
-        if python_type is str or python_type == "str":
-            return {"type": "string"}
-        elif python_type is int or python_type == "int":
-            return {"type": "integer"}
-        elif python_type is float or python_type == "float":
-            return {"type": "number"}
-        elif python_type is bool or python_type == "bool":
-            return {"type": "boolean"}
+        # Handle string type names (forward references)
+        if isinstance(python_type, str) and python_type in _BASIC_TYPE_STR_MAP:
+            return {"type": _BASIC_TYPE_STR_MAP[python_type]}
 
         # Handle generic types
         origin = get_origin(python_type)
         args = get_args(python_type)
 
-        # Handle Optional (Union with None)
-        if origin is type(None) or (
-            hasattr(python_type, "__origin__")
-            and str(python_type).startswith("typing.Optional")
-        ):
-            # Optional[X] is Union[X, None]
-            if args:
-                # Return schema for the non-None type
-                return self._type_to_schema(args[0])
-            return {"type": "string"}
-
-        # Handle Union types (both typing.Union and Python 3.10+ types.UnionType)
-        is_union = origin is Union
-
-        # Python 3.10+ union syntax (str | None)
-        if sys.version_info >= (3, 10) and not is_union:
-            if isinstance(python_type, types.UnionType):
-                is_union = True
-                # For types.UnionType, we need to get args differently
-                args = get_args(python_type)
+        # Check for Union types (typing.Union or Python 3.10+ types.UnionType)
+        is_union = origin is Union or (
+            sys.version_info >= (3, 10) and isinstance(python_type, types.UnionType)
+        )
 
         if is_union:
-            # For Union types, handle properly with anyOf schema
-            non_none_types = [t for t in args if t is not type(None)]
-            has_none = type(None) in args
+            return self._union_to_schema(args)
 
-            if len(non_none_types) == 0:
-                return {"type": "null"}
-            elif len(non_none_types) == 1 and not has_none:
-                # Single type without None - just return that type's schema
-                return self._type_to_schema(non_none_types[0])
-            elif len(non_none_types) == 1 and has_none:
-                # Optional[X] case - include null type in anyOf for MCP client compatibility
-                # This properly represents Optional[str] as anyOf: [{type: string}, {type: null}]
-                return {
-                    "anyOf": [self._type_to_schema(non_none_types[0]), {"type": "null"}]
-                }
-            else:
-                # Multiple non-None types: use anyOf schema
-                # This properly represents Union[str, int] as anyOf: [{type: string}, {type: integer}]
-                schemas = [self._type_to_schema(t) for t in non_none_types]
-                if has_none:
-                    schemas.append({"type": "null"})
-                return {"anyOf": schemas}
-
-        # Handle list
+        # Handle container types
         if origin is list:
-            if args:
-                return {"type": "array", "items": self._type_to_schema(args[0])}
-            return {"type": "array"}
-
-        # Handle dict
-        elif origin is dict:
-            if args and len(args) >= 2:
-                # Dict[str, X] - additionalProperties pattern
-                return {
-                    "type": "object",
-                    "additionalProperties": self._type_to_schema(args[1]),
-                }
-            return {"type": "object"}
-
-        # Handle tuple
-        elif origin is tuple:
-            if args:
-                # Fixed-length tuple with known types
-                return {
-                    "type": "array",
-                    "items": [self._type_to_schema(t) for t in args],
-                    "minItems": len(args),
-                    "maxItems": len(args),
-                }
-            return {"type": "array"}
+            return self._list_to_schema(args)
+        if origin is dict:
+            return self._dict_to_schema(args)
+        if origin is tuple:
+            return self._tuple_to_schema(args)
 
         # Default to string for unknown types
         return {"type": "string"}
+
+    def _union_to_schema(self, args: tuple) -> dict:
+        """Convert Union type args to JSON Schema."""
+        non_none_types = [t for t in args if t is not type(None)]
+        has_none = type(None) in args
+
+        if len(non_none_types) == 0:
+            return {"type": "null"}
+        if len(non_none_types) == 1 and not has_none:
+            return self._type_to_schema(non_none_types[0])
+        if len(non_none_types) == 1 and has_none:
+            # Optional[X] -> anyOf: [{type: X}, {type: null}]
+            return {
+                "anyOf": [self._type_to_schema(non_none_types[0]), {"type": "null"}]
+            }
+
+        # Multiple types -> anyOf schema
+        schemas = [self._type_to_schema(t) for t in non_none_types]
+        if has_none:
+            schemas.append({"type": "null"})
+        return {"anyOf": schemas}
+
+    def _list_to_schema(self, args: tuple) -> dict:
+        """Convert List type to JSON Schema."""
+        if args:
+            return {"type": "array", "items": self._type_to_schema(args[0])}
+        return {"type": "array"}
+
+    def _dict_to_schema(self, args: tuple) -> dict:
+        """Convert Dict type to JSON Schema."""
+        if args and len(args) >= 2:
+            return {
+                "type": "object",
+                "additionalProperties": self._type_to_schema(args[1]),
+            }
+        return {"type": "object"}
+
+    def _tuple_to_schema(self, args: tuple) -> dict:
+        """Convert Tuple type to JSON Schema."""
+        if args:
+            return {
+                "type": "array",
+                "items": [self._type_to_schema(t) for t in args],
+                "minItems": len(args),
+                "maxItems": len(args),
+            }
+        return {"type": "array"}
 
     def list_tools(self) -> list[dict]:
         """
