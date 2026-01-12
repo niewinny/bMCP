@@ -137,7 +137,7 @@ _connection_pool: Optional[HTTPConnectionPool] = None
 
 def forward_to_blender(
     message: dict, endpoint: str, retries: int = MAX_RETRIES
-) -> dict:
+) -> Optional[dict]:
     """
     Forward a JSON-RPC message to Blender's HTTP server.
 

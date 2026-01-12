@@ -8,7 +8,7 @@ Implements decorator-based registration with automatic schema generation.
 import inspect
 import sys
 import types
-from typing import Any, Callable, Union, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 from .logger import get_logger
 from .utils.validators import get_cached_type_hints
@@ -124,7 +124,7 @@ class MCPServer:
         self._resource_cache.clear()
         self._prompt_cache.clear()
 
-    def _generate_schema(self, func: Callable[..., Any]) -> dict:
+    def _generate_schema(self, func: types.FunctionType) -> dict:
         """
         Generate JSON Schema from function signature and type hints.
 

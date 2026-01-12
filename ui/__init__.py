@@ -71,7 +71,7 @@ class BMCPMainMenu(bpy.types.Menu):
 def draw_bmcp_menu(self, _context) -> None:
     """Draw the bMCP menu in the top bar."""
     layout = self.layout
-    layout.menu("BMCP_MT_Main", text="bMCP")
+    layout.menu("BMCP_MT_Main", text="MCP")
 
 
 classes = (BMCPMainMenu,)

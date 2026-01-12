@@ -5,7 +5,8 @@ Provides @resource decorator and registry for resource discovery.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Set
+from types import FunctionType
+from typing import List, Optional, Set
 
 # Import directly from submodules to avoid circular import through mcp/__init__.py
 from ...logger import get_logger
@@ -19,7 +20,7 @@ class ResourceRegistration:
     """Resource registration entry."""
 
     uri: str
-    handler: Callable[..., Any]
+    handler: FunctionType
     name: Optional[str] = None
     description: Optional[str] = None
 
@@ -29,7 +30,7 @@ _resource_registry: List[ResourceRegistration] = []
 _registered_uris: Set[str] = set()  # Track URIs to prevent duplicates
 
 
-def resource(func: Callable[..., Any]) -> Callable[..., Any]:
+def resource(func: FunctionType) -> FunctionType:
     """
     Decorator to register a resource.
 

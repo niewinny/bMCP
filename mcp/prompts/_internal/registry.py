@@ -6,7 +6,8 @@ Provides @prompt decorator and registry for prompt discovery.
 
 import inspect
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Set
+from types import FunctionType
+from typing import List, Optional, Set
 
 from ...logger import get_logger
 from ...utils import validators as utils
@@ -28,7 +29,7 @@ class PromptRegistration:
     """Prompt registration entry."""
 
     name: str
-    handler: Callable[..., List[dict]]
+    handler: FunctionType
     title: Optional[str] = None  # Human-readable display name
     description: Optional[str] = None
     arguments: List[PromptArgument] = field(default_factory=list)
@@ -39,7 +40,7 @@ _prompt_registry: List[PromptRegistration] = []
 _registered_names: Set[str] = set()
 
 
-def prompt(func: Callable[..., List[dict]]) -> Callable[..., List[dict]]:
+def prompt(func: FunctionType) -> FunctionType:
     """
     Decorator to register an MCP prompt.
 

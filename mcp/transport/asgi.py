@@ -144,7 +144,10 @@ class SSEQueue:
         Returns True if message was added, False if dropped.
         """
         self.last_activity = time.time()
-        if len(self.messages) >= self.messages.maxlen:
+        if (
+            self.messages.maxlen is not None
+            and len(self.messages) >= self.messages.maxlen
+        ):
             # Queue is full - oldest message will be dropped
             self.dropped_count += 1
             self.last_drop_notified = False

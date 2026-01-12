@@ -288,7 +288,6 @@ async def execute_resource(uri: str, timeout: float | None = None) -> str:
         timeout = RESOURCE_EXECUTION_TIMEOUT
 
     job_id = str(uuid.uuid4())
-    start_time = time.time()
 
     # Key names for window_manager properties
     result_key = f"mcp_resource_data_{job_id}"

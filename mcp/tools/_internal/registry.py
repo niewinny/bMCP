@@ -5,7 +5,8 @@ Provides @tool decorator and registry for tool discovery.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Set
+from types import FunctionType
+from typing import List, Optional, Set
 
 # Import directly from submodules to avoid circular import through mcp/__init__.py
 from ...logger import get_logger
@@ -18,7 +19,7 @@ logger = get_logger("bmcp-tools-registry")
 class ToolRegistration:
     """Tool registration entry."""
 
-    handler: Callable[..., Any]
+    handler: FunctionType
     name: Optional[str] = None
     description: Optional[str] = None
 
@@ -29,7 +30,7 @@ _tool_registry: List[ToolRegistration] = []
 _registered_tool_names: Set[str] = set()
 
 
-def tool(func: Callable[..., Any]) -> Callable[..., Any]:
+def tool(func: FunctionType) -> FunctionType:
     """
     Decorator to register an async MCP tool.
 

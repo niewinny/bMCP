@@ -6,7 +6,8 @@ All validators return True if valid, False if invalid (with logging).
 """
 
 import logging
-from typing import Any, Callable, get_type_hints
+from types import FunctionType
+from typing import Any, get_type_hints
 
 # =============================================================================
 # TYPE HINTS CACHE - Avoids expensive re-parsing of type hints
@@ -14,7 +15,7 @@ from typing import Any, Callable, get_type_hints
 _type_hints_cache: dict[int, dict] = {}  # keyed by id(func)
 
 
-def get_cached_type_hints(func: Callable) -> dict:
+def get_cached_type_hints(func: FunctionType) -> dict:
     """
     Get type hints for a function with caching.
 
@@ -65,7 +66,7 @@ def validate_callable(func: Any, decorator_name: str, logger: logging.Logger) ->
 
 
 def validate_has_name(
-    func: Callable, decorator_name: str, logger: logging.Logger
+    func: FunctionType, decorator_name: str, logger: logging.Logger
 ) -> bool:
     """
     Validate that function has __name__ attribute.
@@ -86,7 +87,7 @@ def validate_has_name(
     return True
 
 
-def check_docstring(func: Callable, logger: logging.Logger) -> bool:
+def check_docstring(func: FunctionType, logger: logging.Logger) -> bool:
     """
     Check if function has docstring, warn if missing.
 
@@ -105,7 +106,7 @@ def check_docstring(func: Callable, logger: logging.Logger) -> bool:
 
 
 def check_return_type(
-    func: Callable, expected_type: type, strict: bool, logger: logging.Logger
+    func: FunctionType, expected_type: type, strict: bool, logger: logging.Logger
 ) -> bool:
     """
     Check if function has correct return type annotation.

@@ -331,8 +331,6 @@ async def dispatch_request(
 
     handler = METHOD_HANDLERS[method]
 
-    # Call handler with appropriate arguments
-    if params is not None:
-        return await handler(mcp_server, params)
-    else:
-        return await handler(mcp_server)
+    # Always pass params - handlers with Optional[dict] accept None,
+    # handlers requiring dict will fail with clear validation error
+    return await handler(mcp_server, params)
