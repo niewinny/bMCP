@@ -8,6 +8,9 @@ from typing import List
 
 from ._internal.registry import prompt
 
+# Valid focus values for the explain_geonodes prompt
+VALID_FOCUS_VALUES = {"all", "inputs", "outputs", "flow", "optimization"}
+
 
 @prompt
 def explain_geonodes(focus: str = "all") -> List[dict]:
@@ -15,7 +18,16 @@ def explain_geonodes(focus: str = "all") -> List[dict]:
 
     Args:
         focus: Area to focus on - "all", "inputs", "outputs", "flow", or "optimization"
+
+    Raises:
+        ValueError: If focus value is not one of the valid options
     """
+    if focus not in VALID_FOCUS_VALUES:
+        raise ValueError(
+            f"Invalid focus value: '{focus}'. "
+            f"Must be one of: {', '.join(sorted(VALID_FOCUS_VALUES))}"
+        )
+
     base_instruction = """You are a Blender geometry nodes expert. Your task is to analyze and explain the geometry nodes setup provided by the `blender://selected_geometry_nodes` resource.
 
 ## Instructions

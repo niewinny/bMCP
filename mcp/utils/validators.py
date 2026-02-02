@@ -140,8 +140,10 @@ def check_return_type(
                         f"'{func.__name__}' must return '{expected_type.__name__}', "
                         f"got '{return_type}'"
                     )
-        except (NameError, AttributeError, TypeError):
+        except Exception:
             # Forward reference resolution failed - just check string representation
+            # Catch all exceptions as get_type_hints can raise various errors
+            # (NameError, AttributeError, TypeError, RecursionError, etc.)
             return_annotation = raw_annotations.get("return", "")
             if expected_type.__name__ not in str(return_annotation):
                 logger.warning(

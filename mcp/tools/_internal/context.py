@@ -2,7 +2,7 @@
 Base Tool Context and Helpers
 
 Provides context access for tool functions to get execution environment details.
-Uses thread-local storage to ensure thread safety for concurrent access.
+Uses a shared global instance with lock protection for thread safety.
 """
 
 import threading

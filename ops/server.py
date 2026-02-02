@@ -17,7 +17,7 @@ class BMCP_OT_start_mcp_server(bpy.types.Operator):
     bl_description = "Start the MCP server for AI assistant communication"
     bl_options = {"REGISTER"}
 
-    def execute(self, _context) -> set[str]:
+    def execute(self, _context) -> set:
         # Check if server is shutting down - wait for it to complete
         if is_shutting_down():
             self.report({"INFO"}, "Waiting for previous server to shut down...")
@@ -52,7 +52,7 @@ class BMCP_OT_stop_mcp_server(bpy.types.Operator):
     bl_description = "Stop the MCP server"
     bl_options = {"REGISTER"}
 
-    def execute(self, _context) -> set[str]:
+    def execute(self, _context) -> set:
         if not is_running():
             self.report({"WARNING"}, "MCP Server is not running")
             return {"CANCELLED"}

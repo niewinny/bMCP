@@ -1,11 +1,49 @@
+import time
+
 import bpy
 
 from .. import __package__ as base_package
 from ..mcp import is_running as is_server_running
 from ..mcp.utils.config import DEFAULT_SERVER_PORT
 
-# Version constant - update this when version changes
-ADDON_VERSION = (1, 0, 0)
+# Cache for server state to avoid calling is_server_running() on every redraw
+_server_state_cache = {"running": False, "timestamp": 0.0}
+CACHE_TTL = 0.5  # Cache valid for 0.5 seconds
+
+
+def get_cached_server_state() -> bool:
+    """Get cached server running state, refreshing if stale."""
+    now = time.time()
+    if now - _server_state_cache["timestamp"] > CACHE_TTL:
+        _server_state_cache["running"] = is_server_running()
+        _server_state_cache["timestamp"] = now
+    return _server_state_cache["running"]
+
+
+def _get_addon_version() -> tuple:
+    """Get addon version from blender_manifest.toml or use fallback."""
+    try:
+        import os
+
+        manifest_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "blender_manifest.toml",
+        )
+        if os.path.exists(manifest_path):
+            with open(manifest_path, encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("version"):
+                        # Parse version = "1.0.0"
+                        version_str = line.split("=")[1].strip().strip('"')
+                        parts = version_str.split(".")
+                        return tuple(int(p) for p in parts[:3])
+    except Exception:
+        pass
+    return (1, 0, 0)  # Fallback
+
+
+# Version from manifest
+ADDON_VERSION = _get_addon_version()
 
 
 class BMCPMainMenu(bpy.types.Menu):
@@ -16,7 +54,7 @@ class BMCPMainMenu(bpy.types.Menu):
         layout = self.layout
         layout.operator_context = "INVOKE_DEFAULT"
 
-        server_running = is_server_running()
+        server_running = get_cached_server_state()
 
         addon_prefs = bpy.context.preferences.addons.get(base_package)
         if addon_prefs and addon_prefs.preferences:
@@ -27,14 +65,17 @@ class BMCPMainMenu(bpy.types.Menu):
             port = DEFAULT_SERVER_PORT
             network_access = False
 
+        # Display address based on network_access setting
+        display_host = "0.0.0.0" if network_access else "127.0.0.1"
+
         layout.separator(type="SPACE", factor=0.5)
         col = layout.column(align=True)
         col.scale_y = 0.9
         if server_running:
             col.label(text="Status: Running")
             if network_access:
-                col.label(text=f"SSE:  http://127.0.0.1:{port}/sse")
-                col.label(text=f"HTTP: http://127.0.0.1:{port}/http")
+                col.label(text=f"SSE:  http://{display_host}:{port}/sse")
+                col.label(text=f"HTTP: http://{display_host}:{port}/http")
                 # Display security warning when network access is enabled (0.0.0.0 binding allows remote code execution)
                 warning_col = layout.column(align=True)
                 warning_col.alert = True
@@ -44,8 +85,8 @@ class BMCPMainMenu(bpy.types.Menu):
                     text="Network accessible - Code execution from network!"
                 )
             else:
-                col.label(text=f"SSE:  http://127.0.0.1:{port}/sse")
-                col.label(text=f"HTTP: http://127.0.0.1:{port}/http")
+                col.label(text=f"SSE:  http://{display_host}:{port}/sse")
+                col.label(text=f"HTTP: http://{display_host}:{port}/http")
                 col.label(text="(Localhost only)", icon="LOCKED")
         else:
             col.label(text="Status: Disabled")
@@ -77,11 +118,11 @@ def draw_bmcp_menu(self, _context) -> None:
 classes = (BMCPMainMenu,)
 
 
-def register() -> None:
+def register():
     """Register UI elements with Blender."""
     bpy.types.TOPBAR_MT_editor_menus.append(draw_bmcp_menu)
 
 
-def unregister() -> None:
+def unregister():
     """Unregister UI elements from Blender."""
     bpy.types.TOPBAR_MT_editor_menus.remove(draw_bmcp_menu)

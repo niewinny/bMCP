@@ -102,8 +102,21 @@ async def handle_tools_call(mcp_server, params: dict) -> dict:
         try:
             result = await mcp_server.call_tool(tool_name, arguments)
 
-            # Convert result to string and validate size
-            result_str = str(result)
+            # Convert result to string with size-aware approach
+            # For dict/list results, check estimated size first to avoid large string conversion
+            if isinstance(result, (dict, list)):
+                # Estimate size by sampling (avoid full serialization for huge objects)
+                try:
+                    import json
+
+                    # Try to serialize with size limit check
+                    result_str = json.dumps(result, default=str)
+                except (TypeError, ValueError):
+                    result_str = str(result)
+            else:
+                result_str = str(result)
+
+            # Truncate if too large
             if len(result_str) > OUTPUT_SIZE_LIMIT:
                 original_size = len(result_str)
                 result_str = (

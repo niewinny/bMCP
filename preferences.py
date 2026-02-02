@@ -9,8 +9,11 @@ import bpy
 from . import __package__ as base_package
 from .mcp.utils.config import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_SERVER_PORT
 
+# Flag to prevent recursive preference updates
+_updating_preferences = False
 
-def generate_token(length=DEFAULT_AUTH_TOKEN_LENGTH):
+
+def generate_token(length=DEFAULT_AUTH_TOKEN_LENGTH) -> str:
     """Generate a secure random authentication token."""
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
@@ -21,14 +24,28 @@ class BMCP_Preference(bpy.types.AddonPreferences):
 
     def update_network_access(self, context):
         """Update callback for network access"""
-        if self.network_access:
-            self.auth_required = True
+        global _updating_preferences
+        if _updating_preferences:
+            return
+        _updating_preferences = True
+        try:
+            if self.network_access:
+                self.auth_required = True
+        finally:
+            _updating_preferences = False
 
     def update_auth_required(self, context):
         """Update callback for auth required"""
-        # If auth is disabled but network access is still on, disable network access
-        if not self.auth_required and self.network_access:
-            self.network_access = False
+        global _updating_preferences
+        if _updating_preferences:
+            return
+        _updating_preferences = True
+        try:
+            # If auth is disabled but network access is still on, disable network access
+            if not self.auth_required and self.network_access:
+                self.network_access = False
+        finally:
+            _updating_preferences = False
 
     network_access: bpy.props.BoolProperty(
         name="Allow Network Access",

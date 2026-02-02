@@ -577,9 +577,11 @@ class ServerManager:
                                             ]
                                             for task in tasks:
                                                 task.cancel()
-                                            # Give tasks a moment to cancel
+                                            # Wait for tasks to actually complete
                                             if tasks:
-                                                await asyncio.sleep(0.1)
+                                                await asyncio.gather(
+                                                    *tasks, return_exceptions=True
+                                                )
                                         except RuntimeError:
                                             pass  # Loop may be closing
 

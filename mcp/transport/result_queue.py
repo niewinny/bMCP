@@ -20,6 +20,9 @@ from ..logger import get_logger
 
 logger = get_logger("bmcp-result-queue")
 
+# Job expiration time in seconds (5 minutes)
+JOB_EXPIRATION_SECONDS = 300
+
 
 @dataclass
 class JobEntry:
@@ -61,12 +64,23 @@ class ResultQueue:
         """
         Register a new job and return its synchronization event.
 
+        Also cleans up expired jobs periodically to prevent memory leaks.
+
         Args:
             job_id: Unique identifier for the job
 
         Returns:
             threading.Event that will be set when the job completes
         """
+        # Clean up expired jobs periodically (every 10 registrations)
+        with self._lock:
+            if len(self._queue) > 0 and len(self._queue) % 10 == 0:
+                # Release lock before cleanup to avoid holding it too long
+                pass
+        # Run cleanup outside of main lock
+        if len(self) > 0 and len(self) % 10 == 0:
+            self.cleanup_expired_jobs()
+
         with self._lock:
             entry = JobEntry()
             self._queue[job_id] = entry
@@ -195,6 +209,29 @@ class ResultQueue:
             count = len(self._queue)
             self._queue.clear()
             return count
+
+    def cleanup_expired_jobs(self) -> int:
+        """
+        Remove jobs that have exceeded the expiration time.
+
+        Returns:
+            Number of jobs removed
+        """
+        now = time.time()
+        expired_jobs = []
+
+        with self._lock:
+            for job_id, entry in self._queue.items():
+                if now - entry.created_at > JOB_EXPIRATION_SECONDS:
+                    expired_jobs.append(job_id)
+
+            for job_id in expired_jobs:
+                del self._queue[job_id]
+
+        if expired_jobs:
+            logger.debug("Cleaned up %d expired jobs", len(expired_jobs))
+
+        return len(expired_jobs)
 
     def __len__(self) -> int:
         """Return the number of jobs in the queue."""

@@ -34,7 +34,7 @@ class BMCP_OT_get_resources(bpy.types.Operator):
         options={"SKIP_SAVE"},
     )
 
-    def execute(self, context) -> set[str]:
+    def execute(self, context) -> set:
         # Validate context is available
         if context is None or context.window_manager is None:
             self.report({"ERROR"}, "Invalid context: window_manager not available")

@@ -17,7 +17,7 @@ class BMCP_OT_run_code(Operator):
 
     bl_idname = "bmcp.run_code"
     bl_label = "Run Code"
-    bl_options = {"INTERNAL"}
+    bl_options = {"INTERNAL", "UNDO"}
 
     code: bpy.props.StringProperty(
         name="Code",
@@ -33,7 +33,7 @@ class BMCP_OT_run_code(Operator):
         options={"SKIP_SAVE"},
     )
 
-    def execute(self, context) -> set[str]:
+    def execute(self, context) -> set:
         """Execute the provided Python code"""
         # Validate context is available
         if context is None or context.window_manager is None:
@@ -92,12 +92,8 @@ class BMCP_OT_run_code(Operator):
             }
             context.window_manager[result_key] = json.dumps(result_dict)
 
-            # Manually push undo step - ensures each MCP command is undoable separately
-            # Wrapped in try/except as undo_push can fail in certain contexts (e.g., modal operators)
-            try:
-                bpy.ops.ed.undo_push(message="MCP: Execute Code")
-            except RuntimeError:
-                pass  # Undo not available in current context, silently skip
+            # Note: UNDO support is handled via bl_options = {"INTERNAL", "UNDO"}
+            # Blender automatically creates undo steps for operators with UNDO flag
 
             return {"FINISHED"}
 

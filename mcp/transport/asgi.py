@@ -24,6 +24,7 @@ Shutdown Handling:
 import asyncio
 import json
 import secrets
+import threading
 import time
 import uuid
 from collections import deque
@@ -59,6 +60,12 @@ SSE_CLEANUP_INTERVAL: float = 300.0
 # Reference to cleanup task for cancellation
 _cleanup_task: Optional[asyncio.Task] = None
 
+# Lock for thread-safe access to sse_queues dictionary
+_sse_queues_lock = threading.Lock()
+
+# Maximum request body size (10MB) to prevent DoS attacks
+MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
+
 
 async def cancel_background_tasks() -> int:
     """Cancel all tracked background tasks (called on shutdown).
@@ -68,24 +75,28 @@ async def cancel_background_tasks() -> int:
     """
     global _cleanup_task
 
-    # Cancel cleanup task first
+    # Cancel cleanup task first with timeout to prevent hanging
     if _cleanup_task and not _cleanup_task.done():
         _cleanup_task.cancel()
         try:
-            await _cleanup_task
-        except asyncio.CancelledError:
+            await asyncio.wait_for(_cleanup_task, timeout=2.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 
     # Cancel all tracked tasks
-    count = len(_background_tasks)
-    for task in list(_background_tasks):
+    with _sse_queues_lock:
+        count = len(_background_tasks)
+        tasks_to_cancel = list(_background_tasks)
+
+    for task in tasks_to_cancel:
         task.cancel()
 
     # Wait for all to complete
-    if _background_tasks:
-        await asyncio.gather(*_background_tasks, return_exceptions=True)
+    if tasks_to_cancel:
+        await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
 
-    _background_tasks.clear()
+    with _sse_queues_lock:
+        _background_tasks.clear()
     return count
 
 
@@ -99,15 +110,16 @@ async def cleanup_stale_sse_sessions(sse_queues: dict) -> int:
         Number of sessions cleaned up.
     """
     now = time.time()
-    stale_sessions = [
-        session_id
-        for session_id, queue in sse_queues.items()
-        if now - queue.last_activity > SSE_SESSION_TIMEOUT
-    ]
+    with _sse_queues_lock:
+        stale_sessions = [
+            session_id
+            for session_id, queue in sse_queues.items()
+            if now - queue.last_activity > SSE_SESSION_TIMEOUT
+        ]
 
-    for session_id in stale_sessions:
-        sse_queues.pop(session_id, None)
-        request_logger.debug("Cleaned up stale SSE session: %s", session_id[:8])
+        for session_id in stale_sessions:
+            sse_queues.pop(session_id, None)
+            request_logger.debug("Cleaned up stale SSE session: %s", session_id[:8])
 
     if stale_sessions:
         request_logger.info("Cleaned up %d stale SSE sessions", len(stale_sessions))
@@ -129,7 +141,10 @@ async def _sse_cleanup_loop(sse_queues: dict) -> None:
 
 @dataclass
 class SSEQueue:
-    """SSE message queue with drop tracking and event-based notification."""
+    """SSE message queue with drop tracking and event-based notification.
+
+    Thread-safe: All public methods use internal lock for synchronization.
+    """
 
     messages: deque
     dropped_count: int = 0
@@ -137,32 +152,36 @@ class SSEQueue:
     created_at: float = field(default_factory=time.time)
     last_activity: float = field(default_factory=time.time)
     _event: asyncio.Event = field(default_factory=asyncio.Event)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def append(self, message: dict) -> bool:
         """
         Append a message to the queue and signal waiting consumers.
         Returns True if message was added, False if dropped.
+        Thread-safe.
         """
-        self.last_activity = time.time()
-        if (
-            self.messages.maxlen is not None
-            and len(self.messages) >= self.messages.maxlen
-        ):
-            # Queue is full - oldest message will be dropped
-            self.dropped_count += 1
-            self.last_drop_notified = False
+        with self._lock:
+            self.last_activity = time.time()
+            if (
+                self.messages.maxlen is not None
+                and len(self.messages) >= self.messages.maxlen
+            ):
+                # Queue is full - oldest message will be dropped
+                self.dropped_count += 1
+                self.last_drop_notified = False
+                self.messages.append(message)
+                self._event.set()  # Signal even when dropping - consumer needs to know
+                return False
             self.messages.append(message)
-            self._event.set()  # Signal even when dropping - consumer needs to know
-            return False
-        self.messages.append(message)
-        self._event.set()  # Signal that a new message is available
-        return True
+            self._event.set()  # Signal that a new message is available
+            return True
 
     def popleft(self) -> Optional[dict]:
-        """Pop the oldest message from the queue."""
-        if self.messages:
-            return self.messages.popleft()
-        return None
+        """Pop the oldest message from the queue. Thread-safe."""
+        with self._lock:
+            if self.messages:
+                return self.messages.popleft()
+            return None
 
     async def wait_for_message(self, timeout: float = SSE_POLL_INTERVAL) -> bool:
         """
@@ -184,30 +203,62 @@ class SSEQueue:
     def get_drop_notification(self) -> Optional[dict]:
         """
         Get a drop notification if messages were dropped since last check.
-        Returns None if no notification needed.
+        Returns None if no notification needed. Thread-safe.
         """
-        if not self.last_drop_notified and self.dropped_count > 0:
-            self.last_drop_notified = True
-            count = self.dropped_count
-            self.dropped_count = 0
-            return {
-                "event": "warning",
-                "data": json.dumps(
-                    {
-                        "type": "messages_dropped",
-                        "count": count,
-                        "message": f"{count} message(s) were dropped due to slow consumption. "
-                        f"Consider processing messages faster or increasing SSE_QUEUE_SIZE.",
-                    }
-                ),
-            }
-        return None
+        with self._lock:
+            if not self.last_drop_notified and self.dropped_count > 0:
+                self.last_drop_notified = True
+                count = self.dropped_count
+                self.dropped_count = 0
+                return {
+                    "event": "warning",
+                    "data": json.dumps(
+                        {
+                            "type": "messages_dropped",
+                            "count": count,
+                            "message": f"{count} message(s) were dropped due to slow consumption. "
+                            f"Consider processing messages faster or increasing SSE_QUEUE_SIZE.",
+                        }
+                    ),
+                }
+            return None
 
     def __len__(self):
-        return len(self.messages)
+        with self._lock:
+            return len(self.messages)
 
     def __bool__(self):
-        return bool(self.messages)
+        with self._lock:
+            return bool(self.messages)
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to limit request body size and prevent DoS attacks.
+
+    Returns 413 Payload Too Large if request exceeds MAX_REQUEST_BODY_SIZE.
+    """
+
+    async def dispatch(self, request, call_next):
+        # Check Content-Length header if present
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > MAX_REQUEST_BODY_SIZE:
+                    return JSONResponse(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": None,
+                            "error": {
+                                "code": -32600,
+                                "message": f"Request body too large. Maximum size is {MAX_REQUEST_BODY_SIZE // (1024 * 1024)}MB.",
+                            },
+                        },
+                        status_code=413,
+                    )
+            except ValueError:
+                pass  # Invalid content-length, let it through for other validation
+        return await call_next(request)
 
 
 class ShutdownMiddleware(BaseHTTPMiddleware):
@@ -444,7 +495,9 @@ async def sse_endpoint(request):
             session_id = request.headers.get("X-MCP-Session-ID")
 
             # Determine transport mode based on session
-            if session_id and session_id in sse_queues:
+            with _sse_queues_lock:
+                has_session = session_id and session_id in sse_queues
+            if has_session:
                 # SSE mode: Client has active stream, queue response
                 async def process_and_queue():
                     try:
@@ -458,19 +511,23 @@ async def sse_endpoint(request):
                         }
 
                     # Route to specific client's queue (secure!)
-                    # Use try-except to handle race condition where connection closes
-                    # between check and append (TOCTOU race)
-                    try:
-                        sse_queues[session_id].append(response)
-                    except (KeyError, AttributeError):
-                        # Connection closed before we could queue the response
-                        # This is expected during disconnect - response is simply dropped
-                        pass
+                    # Use lock and try-except to handle race condition where connection
+                    # closes between check and append (TOCTOU race)
+                    with _sse_queues_lock:
+                        queue = sse_queues.get(session_id)
+                    if queue:
+                        try:
+                            queue.append(response)
+                        except AttributeError:
+                            # Connection closed before we could queue the response
+                            # This is expected during disconnect - response is simply dropped
+                            pass
 
                 # Start background task and track it for cleanup
                 task = asyncio.create_task(process_and_queue())
-                _background_tasks.add(task)
-                task.add_done_callback(_background_tasks.discard)
+                with _sse_queues_lock:
+                    _background_tasks.add(task)
+                task.add_done_callback(lambda t: _background_tasks.discard(t))
 
                 # Return 202 Accepted per MCP spec
                 return Response(status_code=202)
@@ -511,8 +568,9 @@ async def sse_endpoint(request):
         # Create message queue for this session with configurable limit
         # If client doesn't consume messages fast enough, oldest are dropped
         # and client is notified via warning event
-        sse_queues[session_id] = SSEQueue(messages=deque(maxlen=SSE_QUEUE_SIZE))
-        message_queue = sse_queues[session_id]
+        message_queue = SSEQueue(messages=deque(maxlen=SSE_QUEUE_SIZE))
+        with _sse_queues_lock:
+            sse_queues[session_id] = message_queue
 
         try:
             # Send session ID to client (for POST request routing)
@@ -548,8 +606,8 @@ async def sse_endpoint(request):
             pass
         finally:
             # Cleanup queue on disconnect
-            if session_id in sse_queues:
-                del sse_queues[session_id]
+            with _sse_queues_lock:
+                sse_queues.pop(session_id, None)
 
     return EventSourceResponse(event_generator())
 
@@ -693,6 +751,7 @@ def create_asgi_app(
                 allow_headers=["*"],
                 allow_credentials=True,
             ),
+            Middleware(RequestSizeLimitMiddleware),  # Limit request body size (DoS protection)
             Middleware(ShutdownMiddleware),  # Reject requests during shutdown
             Middleware(RequestLoggingMiddleware),  # Request logging with timing
             Middleware(StatsMiddleware),  # Statistics tracking

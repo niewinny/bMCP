@@ -36,6 +36,7 @@ import io
 import json
 import logging
 import sys
+import threading
 import time
 import traceback
 import urllib.error
@@ -133,6 +134,7 @@ class HTTPConnectionPool:
 
 # Global connection pool (initialized in run_stdio_bridge)
 _connection_pool: Optional[HTTPConnectionPool] = None
+_connection_pool_lock = threading.Lock()
 
 
 def forward_to_blender(
@@ -171,9 +173,11 @@ def forward_to_blender(
 
     for attempt in range(retries + 1):
         try:
-            # Use connection pool if available
-            if _connection_pool:
-                status, reason, response_data = _connection_pool.request(
+            # Use connection pool if available (thread-safe access)
+            with _connection_pool_lock:
+                pool = _connection_pool
+            if pool:
+                status, reason, response_data = pool.request(
                     "POST", path, data, headers
                 )
 
@@ -325,11 +329,12 @@ def run_stdio_bridge(endpoint: str):
 
     logger.debug("Starting stdio bridge to %s", endpoint)
 
-    # Initialize connection pool
+    # Initialize connection pool (thread-safe)
     parsed = urllib.parse.urlparse(endpoint)
     host = parsed.hostname or DEFAULT_BLENDER_HOST
     port = parsed.port or DEFAULT_BLENDER_PORT
-    _connection_pool = HTTPConnectionPool(host, port, timeout=DEFAULT_TIMEOUT)
+    with _connection_pool_lock:
+        _connection_pool = HTTPConnectionPool(host, port, timeout=DEFAULT_TIMEOUT)
     logger.debug("Initialized connection pool to %s:%d", host, port)
 
     logger.debug("Waiting for messages on stdin...")
@@ -379,10 +384,11 @@ def run_stdio_bridge(endpoint: str):
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
     finally:
-        # Clean up connection pool
-        if _connection_pool:
-            _connection_pool.close()
-            logger.debug("Closed connection pool")
+        # Clean up connection pool (thread-safe)
+        with _connection_pool_lock:
+            if _connection_pool:
+                _connection_pool.close()
+                logger.debug("Closed connection pool")
 
 
 def parse_args():

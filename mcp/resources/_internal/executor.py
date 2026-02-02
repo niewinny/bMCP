@@ -164,6 +164,7 @@ def _schedule_property_cleanup_for_job(job_id: str) -> None:
 
     This is called when an operation is cancelled to clean up any orphaned properties.
     Runs on Blender's main thread via timer.
+    Uses try-except instead of check-then-delete to avoid TOCTOU race conditions.
     """
 
     def cleanup():
@@ -176,9 +177,11 @@ def _schedule_property_cleanup_for_job(job_id: str) -> None:
                 f"mcp_result_{job_id}",
             ]
             for key in keys_to_delete:
-                if key in wm:
+                try:
                     del wm[key]
                     logger.debug("Cleaned up orphaned property: %s", key)
+                except KeyError:
+                    pass  # Key doesn't exist, that's fine
         except Exception as e:
             logger.debug("Property cleanup error (non-fatal): %s", e)
 
@@ -192,14 +195,17 @@ def _cleanup_properties_immediately(wm, keys: tuple) -> None:
     """
     Clean up window_manager properties IMMEDIATELY (not scheduled).
 
+    Uses try-except instead of check-then-delete to avoid TOCTOU race conditions.
+
     Args:
         wm: Window manager reference
         keys: Tuple of property keys to delete
     """
     for key in keys:
         try:
-            if key in wm:
-                del wm[key]
+            del wm[key]
+        except KeyError:
+            pass  # Key already deleted, that's fine
         except Exception as e:
             logger.debug("Failed to delete property %s: %s", key, e)
 
