@@ -4,7 +4,7 @@ import bpy
 
 from .. import __package__ as base_package
 from bmcp import is_server_running
-from bmcp.utils.config import DEFAULT_SERVER_PORT
+from bmcp.config import DEFAULT_SERVER_PORT
 
 # Cache for server state to avoid calling is_server_running() on every redraw
 _server_state_cache = {"running": False, "timestamp": 0.0}

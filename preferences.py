@@ -6,7 +6,7 @@ import sys
 import bpy
 
 from . import __package__ as base_package
-from bmcp.utils.config import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_SERVER_PORT
+from bmcp.config import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_SERVER_PORT
 
 # Flag to prevent recursive preference updates
 _updating_preferences = False
@@ -57,6 +57,7 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         name="Authentication Token",
         description="Secure token required for all HTTP/SSE connections. Clients must provide this via 'Authorization: Bearer <token>' header or '?token=<token>' query parameter",
         default="",
+        subtype="PASSWORD",
     )
 
     auth_required: bpy.props.BoolProperty(
