@@ -25,17 +25,12 @@ def unregister():
     ui.unregister()
 
     # 2. Stop the MCP server if running (no more UI callbacks can occur)
-    from bmcp import (
-        is_server_running,
-        is_server_shutting_down,
-        stop_mcp_server,
-        wait_for_shutdown,
-    )
+    from bmcp.server import is_running, is_shutting_down, stop, wait
 
     try:
-        if is_server_running() and not is_server_shutting_down():
-            stop_mcp_server()
-            wait_for_shutdown(timeout=2.0)
+        if is_running() and not is_shutting_down():
+            stop()
+            wait(timeout=2.0)
     except Exception:
         pass
 

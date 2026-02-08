@@ -82,11 +82,8 @@ For clients that support Server-Sent Events (streaming responses).
 # Decorators — register tools, resources, and prompts
 from bmcp import tool, resource, prompt
 
-# Server control
-from bmcp import start_mcp_server, stop_mcp_server, is_server_running
-
-# Configuration constants
-from bmcp.config import DEFAULT_SERVER_PORT, OUTPUT_SIZE_LIMIT
+# Server lifecycle and configuration
+from bmcp.server import start, stop, is_running, DEFAULT_PORT
 ```
 
 ## License

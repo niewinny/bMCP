@@ -3,10 +3,9 @@ import time
 import bpy
 
 from .. import __package__ as base_package
-from bmcp import is_server_running
-from bmcp.config import DEFAULT_SERVER_PORT
+from bmcp.server import is_running, DEFAULT_PORT
 
-# Cache for server state to avoid calling is_server_running() on every redraw
+# Cache for server state to avoid calling is_running() on every redraw
 _server_state_cache = {"running": False, "timestamp": 0.0}
 CACHE_TTL = 0.5  # Cache valid for 0.5 seconds
 
@@ -15,7 +14,7 @@ def get_cached_server_state() -> bool:
     """Get cached server running state, refreshing if stale."""
     now = time.time()
     if now - _server_state_cache["timestamp"] > CACHE_TTL:
-        _server_state_cache["running"] = is_server_running()
+        _server_state_cache["running"] = is_running()
         _server_state_cache["timestamp"] = now
     return _server_state_cache["running"]
 
@@ -58,10 +57,10 @@ class BMCPMainMenu(bpy.types.Menu):
 
         addon_prefs = bpy.context.preferences.addons.get(base_package)
         if addon_prefs and addon_prefs.preferences:
-            port = getattr(addon_prefs.preferences, "server_port", DEFAULT_SERVER_PORT)
+            port = getattr(addon_prefs.preferences, "server_port", DEFAULT_PORT)
             network_access = getattr(addon_prefs.preferences, "network_access", False)
         else:
-            port = DEFAULT_SERVER_PORT
+            port = DEFAULT_PORT
             network_access = False
 
         display_host = "0.0.0.0" if network_access else "127.0.0.1"

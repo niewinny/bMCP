@@ -6,7 +6,7 @@ import sys
 import bpy
 
 from . import __package__ as base_package
-from bmcp.config import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_SERVER_PORT
+from bmcp.server import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_PORT
 
 # Flag to prevent recursive preference updates
 _updating_preferences = False
@@ -70,7 +70,7 @@ class BMCP_Preference(bpy.types.AddonPreferences):
     server_port: bpy.props.IntProperty(
         name="Server Port",
         description="Port number for the MCP server",
-        default=DEFAULT_SERVER_PORT,
+        default=DEFAULT_PORT,
         min=1024,
         max=65535,
     )
