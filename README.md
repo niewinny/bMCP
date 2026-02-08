@@ -36,7 +36,7 @@ For CLI-based MCP clients that use stdin/stdout.
   "mcpServers": {
     "blender": {
       "command": "/path/to/blender/python",
-      "args": ["/path/to/stdio.py"]
+      "args": ["-m", "bmcp.transport.stdio"]
     }
   }
 }
@@ -75,6 +75,19 @@ For clients that support Server-Sent Events (streaming responses).
 ```
 
 **Use with:** Claude Code, Cursor, any SSE-capable client
+
+## Key Imports
+
+```python
+# Decorators — register tools, resources, and prompts
+from bmcp import tool, resource, prompt
+
+# Server control
+from bmcp import start_mcp_server, stop_mcp_server, is_server_running
+
+# Configuration constants
+from bmcp.config import DEFAULT_SERVER_PORT, OUTPUT_SIZE_LIMIT
+```
 
 ## License
 

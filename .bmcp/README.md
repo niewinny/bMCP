@@ -13,6 +13,19 @@ python3 -m venv /tmp/venv && /tmp/venv/bin/pip install hatchling
 ## Public API
 
 ```python
+# Decorators
+from bmcp import tool, resource, prompt
+
+# Server control
+from bmcp import start_mcp_server, stop_mcp_server, is_server_running
+
+# Configuration
+from bmcp.config import DEFAULT_SERVER_PORT, OUTPUT_SIZE_LIMIT
+```
+
+### All exports
+
+```python
 from bmcp import (
     # Decorators
     tool,              # @tool on async fn — registers MCP tool
@@ -30,15 +43,12 @@ from bmcp import (
     MCPServer,         # MCPServer(name) — protocol handler
 
     # Registries
-    iter_tools,        # () -> list[ToolRegistration]       (.name, .handler, .description)
-    iter_resources,    # () -> list[ResourceRegistration]   (.uri, .name, .handler, .description)
-    iter_prompts,      # () -> list[PromptRegistration]     (.name, .title, .description, .arguments)
+    iter_tools,        # () -> list[ToolRegistration]
+    iter_resources,    # () -> list[ResourceRegistration]
+    iter_prompts,      # () -> list[PromptRegistration]
     clear_tools,       # () -> None
     clear_resources,   # () -> None
     clear_prompts,     # () -> None
-
-    # Config
-    set_uri_scheme,    # (scheme: str) — set resource URI prefix ("blender" -> blender://...)
 
     # Context
     get_context,       # () -> ToolContext
@@ -61,7 +71,7 @@ async def my_tool(ctx, code: str) -> str:
 
 @resource
 def my_resource() -> str:
-    """Sync only. Returns str. URI auto-generated: {scheme}://{fn_name}"""
+    """Sync only. Returns str. URI auto-generated: blender://{fn_name}"""
     return "# markdown content"
 
 @prompt
@@ -97,7 +107,7 @@ manager.stop()
 ## Config Constants
 
 ```python
-from bmcp.utils.config import (
+from bmcp.config import (
     DEFAULT_SERVER_PORT,            # 12097
     DEFAULT_AUTH_TOKEN_LENGTH,      # 32
     TOOL_EXECUTION_TIMEOUT,         # 300s
