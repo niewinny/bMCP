@@ -16,6 +16,10 @@ Note: http_server is lazily imported to avoid triggering bpy import at module le
 # Lazy imports to avoid triggering bpy import at module level.
 # http_server.py uses conditional bpy import - this prevents import errors
 # when the library is used standalone (without Blender).
+# Uses importlib.import_module instead of 'from . import' to avoid
+# infinite recursion via _handle_fromlist on Python 3.13+.
+
+import importlib
 
 _lazy_modules = {}
 
@@ -23,8 +27,9 @@ _lazy_modules = {}
 def __getattr__(name):
     if name == "http_server":
         if "http_server" not in _lazy_modules:
-            from . import http_server
-            _lazy_modules["http_server"] = http_server
+            _lazy_modules["http_server"] = importlib.import_module(
+                ".http_server", __name__
+            )
         return _lazy_modules["http_server"]
 
     if name in (
