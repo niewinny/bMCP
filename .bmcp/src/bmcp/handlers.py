@@ -9,7 +9,7 @@ import traceback
 from typing import Any, Optional
 
 from .logger import RequestTimer, get_logger
-from .utils.config import OUTPUT_SIZE_LIMIT
+from .config import OUTPUT_SIZE_LIMIT
 
 # Get logger for this module
 logger = get_logger("bmcp-handlers")
