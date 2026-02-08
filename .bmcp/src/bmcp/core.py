@@ -179,12 +179,18 @@ class MCPServer:
             # Convert Python type to JSON Schema
             properties[param_name] = self._type_to_schema(param_type)
 
-            # Extract description from docstring if available
-            if func.__doc__:
-                # Simple extraction - look for "param_name: description" pattern
-                for line in func.__doc__.split("\n"):
-                    if param_name in line and ":" in line:
-                        desc = line.split(":", 1)[1].strip()
+            # Extract description from docstring Args: section only
+            if func.__doc__ and "Args:" in func.__doc__:
+                args_section = func.__doc__.split("Args:", 1)[1]
+                # Stop at next section header
+                for header in ("Returns:", "Raises:", "Yields:", "Note:", "Example:"):
+                    end_idx = args_section.find(header)
+                    if end_idx != -1:
+                        args_section = args_section[:end_idx]
+                for line in args_section.split("\n"):
+                    stripped = line.strip()
+                    if stripped.startswith(f"{param_name}:"):
+                        desc = stripped.split(":", 1)[1].strip()
                         if desc:
                             properties[param_name]["description"] = desc
                         break

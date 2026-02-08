@@ -73,9 +73,6 @@ class ResultQueue:
             threading.Event that will be set when the job completes
         """
         # Clean up expired jobs periodically (every 10 registrations)
-        with self._lock:
-            if len(self._queue) > 0 and len(self._queue) % 10 == 0:
-                pass
         if len(self) > 0 and len(self) % 10 == 0:
             self.cleanup_expired_jobs()
 
