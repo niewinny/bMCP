@@ -36,10 +36,9 @@ if _HAS_BPY:
     import uuid
     from collections import OrderedDict
 
-    from ...utils.config import (
+    from ...config import (
         MAX_PENDING_OPERATIONS,
         RESOURCE_EXECUTION_TIMEOUT,
-        STALE_PROPERTY_AGE,
     )
 
     # Track pending operations: job_id -> {"start_time": float, "cancelled": bool, "event": asyncio.Event, "loop": asyncio.AbstractEventLoop}
@@ -163,9 +162,17 @@ if _HAS_BPY:
                 logger.debug("Failed to delete property %s: %s", key, e)
 
     def cleanup_stale_properties(max_age: float | None = None) -> int:
-        """Clean up stale window_manager properties from crashed/abandoned operations."""
-        if max_age is None:
-            max_age = STALE_PROPERTY_AGE
+        """Clean up MCP window_manager properties from previous/crashed operations.
+
+        Note: Blender custom properties don't store timestamps, so max_age
+        cannot be checked. All matching MCP properties are removed.
+
+        Args:
+            max_age: Unused (kept for API compatibility). All matching
+                properties are removed regardless of age.
+        """
+        # max_age is accepted but unused — Blender wm properties have no timestamps
+        _ = max_age
 
         try:
             wm = bpy.context.window_manager

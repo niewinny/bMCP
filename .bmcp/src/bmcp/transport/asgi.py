@@ -42,7 +42,7 @@ from starlette.routing import Route
 from ..core import MCPServer
 from ..handlers import dispatch_request
 from ..logger import clear_request_id, get_logger, set_request_id
-from ..utils.config import SSE_POLL_INTERVAL, SSE_QUEUE_SIZE
+from ..config import SSE_POLL_INTERVAL, SSE_QUEUE_SIZE
 
 # Logger for request logging
 request_logger = get_logger("bmcp-requests")
@@ -144,6 +144,7 @@ class SSEQueue:
     """SSE message queue with drop tracking and event-based notification.
 
     Thread-safe: All public methods use internal lock for synchronization.
+    Uses loop.call_soon_threadsafe for safe cross-thread event signaling.
     """
 
     messages: deque
@@ -153,6 +154,17 @@ class SSEQueue:
     last_activity: float = field(default_factory=time.time)
     _event: asyncio.Event = field(default_factory=asyncio.Event)
     _lock: threading.Lock = field(default_factory=threading.Lock)
+    _loop: Optional[asyncio.AbstractEventLoop] = field(default=None)
+
+    def _safe_set_event(self) -> None:
+        """Signal the event in a thread-safe manner."""
+        if self._loop is not None and self._loop.is_running():
+            try:
+                self._loop.call_soon_threadsafe(self._event.set)
+            except RuntimeError:
+                pass
+        else:
+            self._event.set()
 
     def append(self, message: dict) -> bool:
         """
@@ -170,10 +182,10 @@ class SSEQueue:
                 self.dropped_count += 1
                 self.last_drop_notified = False
                 self.messages.append(message)
-                self._event.set()
+                self._safe_set_event()
                 return False
             self.messages.append(message)
-            self._event.set()
+            self._safe_set_event()
             return True
 
     def popleft(self) -> Optional[dict]:
@@ -506,7 +518,10 @@ async def sse_endpoint(request):
         """Generate SSE events for server-to-client messages."""
         session_id = str(uuid.uuid4())
 
-        message_queue = SSEQueue(messages=deque(maxlen=SSE_QUEUE_SIZE))
+        message_queue = SSEQueue(
+            messages=deque(maxlen=SSE_QUEUE_SIZE),
+            _loop=asyncio.get_running_loop(),
+        )
         with _sse_queues_lock:
             sse_queues[session_id] = message_queue
 
@@ -634,7 +649,11 @@ def create_asgi_app(
         Starlette: ASGI application
     """
     if host == "0.0.0.0":
+        # Network mode: allow all origins but WITHOUT credentials to prevent
+        # cross-site attacks. Auth uses Bearer tokens (not cookies), so
+        # allow_credentials is not needed.
         allowed_origins = ["*"]
+        allow_credentials = False
     else:
         allowed_origins = [
             "http://localhost",
@@ -642,6 +661,7 @@ def create_asgi_app(
             f"http://localhost:{port}",
             f"http://127.0.0.1:{port}",
         ]
+        allow_credentials = True
 
     app = Starlette(
         routes=[
@@ -655,7 +675,7 @@ def create_asgi_app(
                 allow_origins=allowed_origins,
                 allow_methods=["GET", "POST", "OPTIONS"],
                 allow_headers=["*"],
-                allow_credentials=True,
+                allow_credentials=allow_credentials,
             ),
             Middleware(RequestSizeLimitMiddleware),
             Middleware(ShutdownMiddleware),

@@ -40,7 +40,7 @@ from ..resources._internal.executor import (
     cleanup_stale_properties,
     clear_pending_operations,
 )
-from ..utils.config import (
+from ..config import (
     DEFAULT_SERVER_PORT,
     GRACEFUL_SHUTDOWN_TIMEOUT,
     SERVER_STARTUP_TIMEOUT,
@@ -87,6 +87,7 @@ class ServerManager:
         # Event for shutdown coordination: set() = shutdown complete (not in progress)
         # cleared = shutdown in progress. Used to prevent starting during shutdown.
         self._shutdown_complete = threading.Event()
+        self._shutdown_complete.set()  # No shutdown in progress at construction
 
     def execute_on_main_thread(self, tool_name: str, arguments: dict) -> dict:
         """
@@ -232,12 +233,10 @@ class ServerManager:
             return mcp
 
         except (AttributeError, TypeError, ValueError) as e:
-            logger.error("Error initializing MCP server: %s", e)
-            traceback.print_exc()
+            logger.exception("Error initializing MCP server: %s", e)
             return None
         except Exception as e:
-            logger.error("Unexpected error initializing MCP server: %s", e)
-            traceback.print_exc()
+            logger.exception("Unexpected error initializing MCP server: %s", e)
             return None
 
     def _get_server_config(self):
@@ -541,16 +540,13 @@ class ServerManager:
                 self._shutting_down = True
                 self._shutdown_complete.clear()
 
-                # Capture references before clearing
+                # Capture references for the shutdown thread
                 server_loop = self._server_loop
                 uvicorn_server = self._uvicorn_server
                 server_thread = self._server_thread
 
-                # Clear references immediately
-                self._server_loop = None
-                self._server_thread = None
-                self._server_task = None
-                self._uvicorn_server = None
+                # NOTE: References are cleared in graceful_shutdown's finally block,
+                # not here, so is_running() returns True during active shutdown.
 
                 # Proper shutdown in background thread (non-blocking)
                 def graceful_shutdown():
@@ -618,6 +614,12 @@ class ServerManager:
                     except Exception as e:
                         logger.warning("Error during shutdown: %s", e)
                     finally:
+                        # Clear server references now that shutdown is complete
+                        self._server_loop = None
+                        self._server_thread = None
+                        self._server_task = None
+                        self._uvicorn_server = None
+
                         try:
                             cleared = clear_pending_operations()
                             if cleared:
@@ -686,33 +688,49 @@ class ServerManager:
         return self._shutdown_complete.wait(timeout=timeout)
 
 
-# Module-level singleton
-_server_manager = ServerManager()
+# Lazy module-level singleton — created on first access to avoid
+# requiring bpy at import time (enables standalone library usage).
+_server_manager = None
+_server_manager_lock = threading.Lock()
+
+
+def _get_server_manager() -> ServerManager:
+    """Get or create the module-level ServerManager singleton."""
+    global _server_manager
+    if _server_manager is None:
+        with _server_manager_lock:
+            if _server_manager is None:
+                _server_manager = ServerManager()
+    return _server_manager
 
 
 # Module-level wrapper functions for backward compatibility
 def execute_on_main_thread(tool_name: str, arguments: dict) -> dict:
     """Wrapper function for ServerManager.execute_on_main_thread"""
-    return _server_manager.execute_on_main_thread(tool_name, arguments)
+    return _get_server_manager().execute_on_main_thread(tool_name, arguments)
 
 
 def start_mcp_server():
     """Wrapper function for ServerManager.start"""
-    return _server_manager.start()
+    return _get_server_manager().start()
 
 
 def stop_mcp_server():
     """Wrapper function for ServerManager.stop"""
-    return _server_manager.stop()
+    return _get_server_manager().stop()
 
 
 def is_server_running():
     """Wrapper function for ServerManager.is_running"""
+    if _server_manager is None:
+        return False
     return _server_manager.is_running()
 
 
 def is_server_shutting_down():
     """Wrapper function for ServerManager.is_shutting_down"""
+    if _server_manager is None:
+        return False
     return _server_manager.is_shutting_down()
 
 
@@ -726,6 +744,8 @@ def wait_for_shutdown(timeout=3.0):
     Returns:
         bool: True if shutdown completed, False if timeout
     """
+    if _server_manager is None:
+        return True
     return _server_manager.wait_for_shutdown(timeout=timeout)
 
 
@@ -741,4 +761,5 @@ def register():
 
 def unregister():
     """Unregister hook - stop server on addon unload"""
-    stop_mcp_server()
+    if _server_manager is not None:
+        _server_manager.stop()
