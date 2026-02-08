@@ -16,10 +16,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 def register():
     """Register Blender addon classes."""
-    from bmcp import set_uri_scheme
-
-    set_uri_scheme("blender")
-
     # Import Blender-specific tools/resources/prompts (triggers @decorator registration)
     from . import prompts, resources, tools  # noqa: F401
 

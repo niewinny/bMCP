@@ -2,7 +2,6 @@
 Resources Registry - Decorator and storage for MCP resources.
 
 Provides @resource decorator and registry for resource discovery.
-Supports configurable URI scheme (default: "app", set to "blender" for Blender addon).
 """
 
 from dataclasses import dataclass
@@ -15,25 +14,8 @@ from ...utils import validators as utils
 
 logger = get_logger("bmcp-resources-registry")
 
-# Configurable URI scheme - default for standalone use
-_uri_scheme: str = "app"
-
-
-def set_uri_scheme(scheme: str) -> None:
-    """
-    Set the URI scheme for resource registration.
-
-    Args:
-        scheme: URI scheme to use (e.g., "blender", "app")
-    """
-    global _uri_scheme
-    _uri_scheme = scheme
-    logger.debug("URI scheme set to: %s", scheme)
-
-
-def get_uri_scheme() -> str:
-    """Get the current URI scheme."""
-    return _uri_scheme
+# URI scheme for resource registration
+URI_SCHEME: str = "blender"
 
 
 @dataclass
@@ -70,7 +52,7 @@ def resource(func: FunctionType) -> FunctionType:
         The same function (unmodified)
 
     Example:
-        @resource  # Auto-generates URI: app://blender_version (or blender://blender_version)
+        @resource  # Auto-generates URI: blender://blender_version
         def blender_version() -> str:
             '''Get the current Blender version.'''
             import bpy
@@ -86,7 +68,7 @@ def resource(func: FunctionType) -> FunctionType:
 
     # Only register if all validations passed
     if is_valid:
-        uri = f"{_uri_scheme}://{func.__name__}"
+        uri = f"{URI_SCHEME}://{func.__name__}"
 
         # Check for duplicate URI
         if uri in _registered_uris:
@@ -120,4 +102,4 @@ def clear_registry() -> None:
     logger.debug("Resource registry cleared")
 
 
-__all__ = ["resource", "iter_resources", "clear_registry", "set_uri_scheme", "get_uri_scheme"]
+__all__ = ["resource", "iter_resources", "clear_registry", "URI_SCHEME"]
