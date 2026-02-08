@@ -6,7 +6,13 @@ Provides Blender operators for starting and stopping the MCP server.
 
 import bpy
 
-from ..mcp import is_running, is_shutting_down, start_server, stop_server, wait_shutdown
+from bmcp import (
+    is_server_running,
+    is_server_shutting_down,
+    start_mcp_server,
+    stop_mcp_server,
+    wait_for_shutdown,
+)
 
 
 class BMCP_OT_start_mcp_server(bpy.types.Operator):
@@ -19,21 +25,19 @@ class BMCP_OT_start_mcp_server(bpy.types.Operator):
 
     def execute(self, _context) -> set:
         # Check if server is shutting down - wait for it to complete
-        if is_shutting_down():
+        if is_server_shutting_down():
             self.report({"INFO"}, "Waiting for previous server to shut down...")
-            # Wait up to 3 seconds for shutdown to complete
-            if not wait_shutdown(timeout=3.0):
+            if not wait_for_shutdown(timeout=3.0):
                 self.report(
                     {"WARNING"}, "Server is still shutting down, please wait a moment"
                 )
                 return {"CANCELLED"}
 
-        # Check if already running
-        if is_running():
+        if is_server_running():
             self.report({"WARNING"}, "MCP Server is already running")
             return {"CANCELLED"}
 
-        if start_server():
+        if start_mcp_server():
             self.report({"INFO"}, "MCP Server started")
             return {"FINISHED"}
         else:
@@ -53,11 +57,11 @@ class BMCP_OT_stop_mcp_server(bpy.types.Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, _context) -> set:
-        if not is_running():
+        if not is_server_running():
             self.report({"WARNING"}, "MCP Server is not running")
             return {"CANCELLED"}
 
-        if stop_server():
+        if stop_mcp_server():
             self.report({"INFO"}, "MCP Server stopped")
             return {"FINISHED"}
         else:

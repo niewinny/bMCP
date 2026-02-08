@@ -1,5 +1,4 @@
 import json
-import os
 import secrets
 import string
 import sys
@@ -7,7 +6,7 @@ import sys
 import bpy
 
 from . import __package__ as base_package
-from .mcp.utils.config import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_SERVER_PORT
+from bmcp.utils.config import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_SERVER_PORT
 
 # Flag to prevent recursive preference updates
 _updating_preferences = False
@@ -152,12 +151,16 @@ class BMCP_Preference(bpy.types.AddonPreferences):
 
         # Get paths
         python_exe = sys.executable
-        addon_dir = os.path.dirname(os.path.abspath(__file__))
-        stdio_script = os.path.join(addon_dir, "mcp", "transport", "stdio.py")
 
         # Generate JSON configuration
+        # Use `python -m bmcp.transport.stdio` since the library is installed as a wheel
         config = {
-            "mcpServers": {"blender": {"command": python_exe, "args": [stdio_script]}}
+            "mcpServers": {
+                "blender": {
+                    "command": python_exe,
+                    "args": ["-m", "bmcp.transport.stdio"],
+                }
+            }
         }
         config_json = json.dumps(config, indent=2)
 

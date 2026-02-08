@@ -3,8 +3,8 @@ import time
 import bpy
 
 from .. import __package__ as base_package
-from ..mcp import is_running as is_server_running
-from ..mcp.utils.config import DEFAULT_SERVER_PORT
+from bmcp import is_server_running
+from bmcp.utils.config import DEFAULT_SERVER_PORT
 
 # Cache for server state to avoid calling is_server_running() on every redraw
 _server_state_cache = {"running": False, "timestamp": 0.0}
@@ -58,14 +58,12 @@ class BMCPMainMenu(bpy.types.Menu):
 
         addon_prefs = bpy.context.preferences.addons.get(base_package)
         if addon_prefs and addon_prefs.preferences:
-            # Use getattr for safety in case properties don't exist
             port = getattr(addon_prefs.preferences, "server_port", DEFAULT_SERVER_PORT)
             network_access = getattr(addon_prefs.preferences, "network_access", False)
         else:
             port = DEFAULT_SERVER_PORT
             network_access = False
 
-        # Display address based on network_access setting
         display_host = "0.0.0.0" if network_access else "127.0.0.1"
 
         layout.separator(type="SPACE", factor=0.5)
@@ -76,7 +74,6 @@ class BMCPMainMenu(bpy.types.Menu):
             if network_access:
                 col.label(text=f"SSE:  http://{display_host}:{port}/sse")
                 col.label(text=f"HTTP: http://{display_host}:{port}/http")
-                # Display security warning when network access is enabled (0.0.0.0 binding allows remote code execution)
                 warning_col = layout.column(align=True)
                 warning_col.alert = True
                 warning_col.scale_y = 0.8
@@ -96,12 +93,10 @@ class BMCPMainMenu(bpy.types.Menu):
         col = layout.column(align=True)
         col.scale_y = 1.4
 
-        # Start button - disabled when server is running
         row = col.row()
         row.enabled = not server_running
         row.operator("bmcp.start_mcp_server", text="Start Server", icon="PLAY")
 
-        # Stop button - disabled when server is not running
         row = col.row()
         row.enabled = server_running
         row.operator("bmcp.stop_mcp_server", text="Stop Server", icon="PAUSE")

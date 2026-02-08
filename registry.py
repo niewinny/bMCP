@@ -25,13 +25,19 @@ def unregister():
     ui.unregister()
 
     # 2. Stop the MCP server if running (no more UI callbacks can occur)
-    from .mcp import is_running, is_shutting_down, stop_server, wait_shutdown
+    from bmcp import (
+        is_server_running,
+        is_server_shutting_down,
+        stop_mcp_server,
+        wait_for_shutdown,
+    )
 
-    if is_running() and not is_shutting_down():
-        stop_server()
-        # Wait for shutdown to complete before unregistering classes
-        # This prevents race conditions where classes are unregistered while server is using them
-        wait_shutdown(timeout=2.0)
+    try:
+        if is_server_running() and not is_server_shutting_down():
+            stop_mcp_server()
+            wait_for_shutdown(timeout=2.0)
+    except Exception:
+        pass
 
     # 3. Unregister classes in reverse order
     for cls in reversed(classes):

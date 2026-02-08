@@ -29,7 +29,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -211,3 +210,8 @@ legacy
 *.blend3
 *.blend4
 *.blend5
+
+# Library build artifacts (source IS tracked)
+.bmcp/dist/
+.bmcp/build/
+.bmcp/src/bmcp.egg-info/

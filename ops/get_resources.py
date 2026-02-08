@@ -7,7 +7,7 @@ Uses the resource registry to look up handlers by URI.
 
 import bpy
 
-from ..mcp.resources._internal.registry import iter_resources
+from bmcp import iter_resources
 
 # Safety limit for output size
 MAX_OUTPUT_SIZE = 2_000_000  # 2MB maximum output size
