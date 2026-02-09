@@ -9,7 +9,7 @@ import traceback
 from typing import Any, Optional
 
 from .logger import RequestTimer, get_logger
-from .config import OUTPUT_SIZE_LIMIT
+from .config import OUTPUT_LIMIT
 
 # Get logger for this module
 logger = get_logger("bmcp-handlers")
@@ -117,19 +117,19 @@ async def handle_tools_call(mcp_server, params: dict) -> dict:
                 result_str = str(result)
 
             # Truncate if too large
-            if len(result_str) > OUTPUT_SIZE_LIMIT:
+            if len(result_str) > OUTPUT_LIMIT:
                 original_size = len(result_str)
                 result_str = (
-                    result_str[:OUTPUT_SIZE_LIMIT] + f"\n\n[OUTPUT TRUNCATED]\n"
+                    result_str[:OUTPUT_LIMIT] + f"\n\n[OUTPUT TRUNCATED]\n"
                     f"Original size: {original_size:,} bytes\n"
-                    f"Limit: {OUTPUT_SIZE_LIMIT:,} bytes\n"
-                    f"Truncated: {original_size - OUTPUT_SIZE_LIMIT:,} bytes"
+                    f"Limit: {OUTPUT_LIMIT:,} bytes\n"
+                    f"Truncated: {original_size - OUTPUT_LIMIT:,} bytes"
                 )
                 logger.warning(
                     "Tool %s output truncated: %d -> %d bytes",
                     tool_name,
                     original_size,
-                    OUTPUT_SIZE_LIMIT,
+                    OUTPUT_LIMIT,
                 )
 
             # Format result according to MCP spec

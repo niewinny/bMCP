@@ -37,8 +37,8 @@ if _HAS_BPY:
     from collections import OrderedDict
 
     from ...config import (
-        MAX_PENDING_OPERATIONS,
-        RESOURCE_EXECUTION_TIMEOUT,
+        MAX_PENDING_OPS,
+        RESOURCE_TIMEOUT,
     )
 
     # Track pending operations: job_id -> {"start_time": float, "cancelled": bool, "event": asyncio.Event, "loop": asyncio.AbstractEventLoop}
@@ -58,7 +58,7 @@ if _HAS_BPY:
     ) -> None:
         """Register a new pending operation, cancelling and REMOVING oldest if at limit."""
         with _pending_lock:
-            if len(_pending_operations) >= MAX_PENDING_OPERATIONS:
+            if len(_pending_operations) >= MAX_PENDING_OPS:
                 oldest_id, oldest_info = next(iter(_pending_operations.items()))
                 oldest_info["cancelled"] = True
 
@@ -77,7 +77,7 @@ if _HAS_BPY:
                     "Operation %s cancelled (queue full, max=%d, age=%.1fs). "
                     "New operation %s taking its place.",
                     oldest_id[:8],
-                    MAX_PENDING_OPERATIONS,
+                    MAX_PENDING_OPS,
                     age,
                     job_id[:8],
                 )
@@ -210,7 +210,7 @@ if _HAS_BPY:
     async def execute_resource(uri: str, timeout: float | None = None) -> str:
         """Execute a resource by URI on Blender's main thread and wait for result."""
         if timeout is None:
-            timeout = RESOURCE_EXECUTION_TIMEOUT
+            timeout = RESOURCE_TIMEOUT
 
         job_id = str(uuid.uuid4())
 
@@ -243,7 +243,7 @@ if _HAS_BPY:
                     f"Resource execution timed out after {timeout:.1f} seconds. "
                     f"URI: {uri}. "
                     f"The resource may still be running in Blender. "
-                    f"To increase the timeout, modify RESOURCE_EXECUTION_TIMEOUT in config.py "
+                    f"To increase the timeout, modify RESOURCE_TIMEOUT in config.py "
                     f"or set it to None for infinite wait."
                 )
                 raise TimeoutError(timeout_msg)
@@ -252,7 +252,7 @@ if _HAS_BPY:
                 _schedule_property_cleanup_for_job(job_id)
                 raise RuntimeError(
                     f"Operation cancelled: too many pending operations "
-                    f"(max {MAX_PENDING_OPERATIONS}). URI: {uri}"
+                    f"(max {MAX_PENDING_OPS}). URI: {uri}"
                 )
 
             error_msg = wm.get(error_key)

@@ -41,10 +41,10 @@ from ..resources._internal.executor import (
     clear_pending_operations,
 )
 from ..config import (
-    DEFAULT_SERVER_PORT,
-    GRACEFUL_SHUTDOWN_TIMEOUT,
-    SERVER_STARTUP_TIMEOUT,
-    TOOL_EXECUTION_TIMEOUT,
+    DEFAULT_PORT,
+    SHUTDOWN_TIMEOUT,
+    STARTUP_TIMEOUT,
+    TOOL_TIMEOUT,
     validate_config,
 )
 from .asgi import create_asgi_app
@@ -104,7 +104,7 @@ class ServerManager:
             Tool execution result dictionary
 
         Raises:
-            TimeoutError: If execution times out (configurable via TOOL_EXECUTION_TIMEOUT)
+            TimeoutError: If execution times out (configurable via TOOL_TIMEOUT)
             RuntimeError: If execution fails
         """
         job_id = str(uuid.uuid4())
@@ -169,7 +169,7 @@ class ServerManager:
 
         # Wait for completion with configurable timeout
         try:
-            completed = event.wait(timeout=TOOL_EXECUTION_TIMEOUT)
+            completed = event.wait(timeout=TOOL_TIMEOUT)
 
             if not completed:
                 # Timeout occurred - mark as cancelled so timer skips execution
@@ -177,13 +177,13 @@ class ServerManager:
                 logger.warning(
                     "Job %s timed out after %s seconds - marked as cancelled",
                     job_id[:8],
-                    TOOL_EXECUTION_TIMEOUT,
+                    TOOL_TIMEOUT,
                 )
                 timeout_msg = (
-                    f"Tool execution timed out after {TOOL_EXECUTION_TIMEOUT} seconds. "
+                    f"Tool execution timed out after {TOOL_TIMEOUT} seconds. "
                     f"The scheduled operation was cancelled and will not execute. "
                     f"If Blender appears frozen, it may be processing a previous request. "
-                    f"To increase the timeout, modify TOOL_EXECUTION_TIMEOUT in config.py "
+                    f"To increase the timeout, modify TOOL_TIMEOUT in config.py "
                     f"or set it to None for infinite wait."
                 )
                 raise TimeoutError(timeout_msg)
@@ -268,7 +268,7 @@ class ServerManager:
             auth_required = addon_prefs.preferences.auth_required
         else:
             network_access = False
-            port = DEFAULT_SERVER_PORT
+            port = DEFAULT_PORT
             enable_logs = False
             auth_token = ""
             auth_required = False
@@ -387,7 +387,7 @@ class ServerManager:
 
         return asyncio.run_coroutine_threadsafe(run_server(), event_loop)
 
-    def _wait_for_server_startup(self, timeout: float = SERVER_STARTUP_TIMEOUT):
+    def _wait_for_server_startup(self, timeout: float = STARTUP_TIMEOUT):
         """
         Wait for server to start with timeout.
 
@@ -592,7 +592,7 @@ class ServerManager:
                                 pass
 
                         if server_thread and server_thread.is_alive():
-                            server_thread.join(timeout=GRACEFUL_SHUTDOWN_TIMEOUT)
+                            server_thread.join(timeout=SHUTDOWN_TIMEOUT)
 
                         if server_thread and server_thread.is_alive():
                             logger.debug(

@@ -14,23 +14,23 @@ from typing import List, Optional, Tuple
 # =============================================================================
 
 # Server defaults
-DEFAULT_SERVER_PORT = 12097
+DEFAULT_PORT = 12097
 DEFAULT_AUTH_TOKEN_LENGTH = 32
 
 # Timeout settings (in seconds)
 # Set to None for no timeout (infinite wait) - use with caution
-TOOL_EXECUTION_TIMEOUT: Optional[float] = 300.0  # 5 minutes for tool execution
-RESOURCE_EXECUTION_TIMEOUT: Optional[float] = 300.0  # 5 minutes for resource execution
-SERVER_STARTUP_TIMEOUT: float = 5.0  # Server startup timeout
-GRACEFUL_SHUTDOWN_TIMEOUT: float = 1.5  # Graceful shutdown wait
+TOOL_TIMEOUT: Optional[float] = 300.0  # 5 minutes for tool execution
+RESOURCE_TIMEOUT: Optional[float] = 300.0  # 5 minutes for resource execution
+STARTUP_TIMEOUT: float = 5.0  # Server startup timeout
+SHUTDOWN_TIMEOUT: float = 1.5  # Graceful shutdown wait
 
 # Queue limits
-MAX_PENDING_OPERATIONS = 50  # Maximum concurrent pending resource operations
+MAX_PENDING_OPS = 50  # Maximum concurrent pending resource operations
 SSE_QUEUE_SIZE = 500  # Maximum messages in SSE queue per session
 
 # Cleanup settings
 STALE_PROPERTY_AGE: float = 300.0  # 5 minutes before properties are considered stale
-OUTPUT_SIZE_LIMIT: int = 2 * 1024 * 1024  # 2MB output limit
+OUTPUT_LIMIT: int = 2 * 1024 * 1024  # 2MB output limit
 
 # Polling intervals (in seconds)
 # Note: These are fallback values - event-based completion is preferred

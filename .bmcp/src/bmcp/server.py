@@ -6,15 +6,15 @@ Lazy imports: server lifecycle functions and ServerManager (trigger bpy).
 """
 
 from .config import (
-    # Constants (short aliases)
-    DEFAULT_SERVER_PORT as DEFAULT_PORT,
+    # Constants
+    DEFAULT_PORT,
     DEFAULT_AUTH_TOKEN_LENGTH,
-    TOOL_EXECUTION_TIMEOUT as TOOL_TIMEOUT,
-    RESOURCE_EXECUTION_TIMEOUT as RESOURCE_TIMEOUT,
-    OUTPUT_SIZE_LIMIT as OUTPUT_LIMIT,
-    SERVER_STARTUP_TIMEOUT as STARTUP_TIMEOUT,
-    GRACEFUL_SHUTDOWN_TIMEOUT as SHUTDOWN_TIMEOUT,
-    MAX_PENDING_OPERATIONS as MAX_PENDING_OPS,
+    TOOL_TIMEOUT,
+    RESOURCE_TIMEOUT,
+    OUTPUT_LIMIT,
+    STARTUP_TIMEOUT,
+    SHUTDOWN_TIMEOUT,
+    MAX_PENDING_OPS,
     SSE_QUEUE_SIZE,
     # Validation
     validate_port,
