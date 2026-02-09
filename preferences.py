@@ -1,4 +1,6 @@
+import glob
 import json
+import os
 import secrets
 import string
 import sys
@@ -152,6 +154,10 @@ class BMCP_Preference(bpy.types.AddonPreferences):
 
         # Get paths
         python_exe = sys.executable
+        addon_dir = os.path.dirname(__file__)
+        wheel_dir = os.path.join(addon_dir, "wheels")
+        wheels = glob.glob(os.path.join(wheel_dir, "bmcp-*.whl"))
+        wheel_path = wheels[0] if wheels else ""
 
         # Generate JSON configuration
         # Use `python -m bmcp.transport.stdio` since the library is installed as a wheel
@@ -163,6 +169,9 @@ class BMCP_Preference(bpy.types.AddonPreferences):
                 "blender": {
                     "command": python_exe,
                     "args": args,
+                    "env": {
+                        "PYTHONPATH": wheel_path,
+                    },
                 }
             }
         }
