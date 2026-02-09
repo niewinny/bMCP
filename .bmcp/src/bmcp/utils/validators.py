@@ -6,13 +6,14 @@ All validators return True if valid, False if invalid (with logging).
 """
 
 import logging
+import weakref
 from types import FunctionType
 from typing import Any, get_type_hints
 
 # =============================================================================
 # TYPE HINTS CACHE - Avoids expensive re-parsing of type hints
 # =============================================================================
-_type_hints_cache: dict[int, dict] = {}  # keyed by id(func)
+_type_hints_cache: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 def get_cached_type_hints(func: FunctionType) -> dict:
@@ -28,14 +29,21 @@ def get_cached_type_hints(func: FunctionType) -> dict:
     Returns:
         dict: Type hints for the function (empty dict if resolution fails)
     """
-    func_id = id(func)
-    if func_id not in _type_hints_cache:
-        try:
-            _type_hints_cache[func_id] = get_type_hints(func)
-        except Exception:
-            # Type hints might not be available in all contexts
-            _type_hints_cache[func_id] = {}
-    return _type_hints_cache[func_id]
+    try:
+        return _type_hints_cache[func]
+    except (KeyError, TypeError):
+        pass
+    try:
+        hints = get_type_hints(func)
+    except Exception:
+        # Type hints might not be available in all contexts
+        hints = {}
+    try:
+        _type_hints_cache[func] = hints
+    except TypeError:
+        # func is not weak-referenceable (e.g. built-in), skip caching
+        pass
+    return hints
 
 
 def clear_type_hints_cache() -> None:

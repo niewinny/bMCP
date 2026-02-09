@@ -11,7 +11,7 @@ type = "add-on"
 website = "https://github.com/niewinny/bMCP"
 
 
-tags = ["Development", "Import-Export", "3D View"]
+tags = ["Development", "System", "3D View"]
 blender_version_min = "4.2.0"
 
 license = [

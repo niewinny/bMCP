@@ -23,22 +23,20 @@ def _get_addon_version() -> tuple:
     """Get addon version from blender_manifest.toml or use fallback."""
     try:
         import os
+        import tomllib
 
         manifest_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "blender_manifest.toml",
         )
-        if os.path.exists(manifest_path):
-            with open(manifest_path, encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("version"):
-                        # Parse version = "1.0.0"
-                        version_str = line.split("=")[1].strip().strip('"')
-                        parts = version_str.split(".")
-                        return tuple(int(p) for p in parts[:3])
+        with open(manifest_path, "rb") as f:
+            data = tomllib.load(f)
+        version_str = data["version"]
+        parts = version_str.split(".")
+        return tuple(int(p) for p in parts[:3])
     except Exception:
         pass
-    return (1, 0, 0)  # Fallback
+    return (0, 1, 0)  # Fallback
 
 
 # Version from manifest

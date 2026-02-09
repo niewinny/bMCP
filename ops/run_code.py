@@ -40,7 +40,11 @@ class BMCP_OT_run_code(Operator):
             self.report({"ERROR"}, "Invalid context: window_manager not available")
             return {"CANCELLED"}
 
-        result_key = f"mcp_result_{self.job_id}" if self.job_id else "mcp_result"
+        if not self.job_id:
+            self.report({"ERROR"}, "job_id is required")
+            return {"CANCELLED"}
+
+        result_key = f"mcp_result_{self.job_id}"
 
         # Clean up any stale data from previous execution
         context.window_manager.pop(result_key, None)

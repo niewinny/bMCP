@@ -180,12 +180,10 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         props.config_text = config_json
         props.config_type = "STDIO"
 
-    def _draw_http_tab(self, layout):
-        """Draw the HTTP configuration tab"""
+    def _draw_endpoint_tab(self, layout, path, config_type):
+        """Draw a server endpoint configuration tab."""
+        server_url = f"http://localhost:{self.server_port}/{path}"
 
-        server_url = f"http://localhost:{self.server_port}/http"
-
-        # Add token to config if present
         headers = {}
         if self.auth_required and self.auth_token:
             headers["Authorization"] = f"Bearer {self.auth_token}"
@@ -193,48 +191,26 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         config = {"mcpServers": {"blender": {"url": server_url, "headers": headers}}}
         config_json = json.dumps(config, indent=2)
 
-        # Display the configuration
         col = layout.column(align=True)
         col.scale_y = 0.75
         for line in config_json.split("\n"):
             col.label(text=f"   {line}")
 
-        # Copy button
         row = layout.row()
         row.scale_y = 1.3
         props = row.operator(
             "bmcp.copy_config", text="Copy Configuration", icon="COPYDOWN"
         )
         props.config_text = config_json
-        props.config_type = "HTTP"
+        props.config_type = config_type
+
+    def _draw_http_tab(self, layout):
+        """Draw the HTTP configuration tab"""
+        self._draw_endpoint_tab(layout, "http", "HTTP")
 
     def _draw_sse_tab(self, layout):
         """Draw the SSE configuration tab (for streaming clients)"""
-
-        server_url = f"http://localhost:{self.server_port}/sse"
-
-        # Add token to config if present
-        headers = {}
-        if self.auth_required and self.auth_token:
-            headers["Authorization"] = f"Bearer {self.auth_token}"
-
-        config = {"mcpServers": {"blender": {"url": server_url, "headers": headers}}}
-        config_json = json.dumps(config, indent=2)
-
-        # Display the configuration
-        col = layout.column(align=True)
-        col.scale_y = 0.75
-        for line in config_json.split("\n"):
-            col.label(text=f"   {line}")
-
-        # Copy button
-        row = layout.row()
-        row.scale_y = 1.3
-        props = row.operator(
-            "bmcp.copy_config", text="Copy Configuration", icon="COPYDOWN"
-        )
-        props.config_text = config_json
-        props.config_type = "SSE"
+        self._draw_endpoint_tab(layout, "sse", "SSE")
 
 
 class BMCP_OT_CopyConfig(bpy.types.Operator):
@@ -256,7 +232,7 @@ class BMCP_OT_CopyConfig(bpy.types.Operator):
     )
 
     def execute(self, context):
-        bpy.context.window_manager.clipboard = self.config_text
+        context.window_manager.clipboard = self.config_text
         self.report({"INFO"}, "Configuration copied!")
         return {"FINISHED"}
 

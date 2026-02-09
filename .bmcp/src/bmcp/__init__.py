@@ -14,7 +14,11 @@ from .prompts._internal.registry import (
     clear_registry as clear_prompts,
 )
 
-__version__ = "0.1.0"
+try:
+    from importlib.metadata import version as _version
+    __version__ = _version("bmcp")
+except Exception:
+    __version__ = "0.1.0"
 
 __all__ = [
     "tool",

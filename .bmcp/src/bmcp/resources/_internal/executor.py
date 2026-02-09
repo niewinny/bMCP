@@ -161,19 +161,12 @@ if _HAS_BPY:
             except Exception as e:
                 logger.debug("Failed to delete property %s: %s", key, e)
 
-    def cleanup_stale_properties(max_age: float | None = None) -> int:
+    def cleanup_stale_properties() -> int:
         """Clean up MCP window_manager properties from previous/crashed operations.
 
-        Note: Blender custom properties don't store timestamps, so max_age
-        cannot be checked. All matching MCP properties are removed.
-
-        Args:
-            max_age: Unused (kept for API compatibility). All matching
-                properties are removed regardless of age.
+        Note: Blender custom properties don't store timestamps, so all
+        matching MCP properties are removed unconditionally.
         """
-        # max_age is accepted but unused — Blender wm properties have no timestamps
-        _ = max_age
-
         try:
             wm = bpy.context.window_manager
             if wm is None:
@@ -288,6 +281,6 @@ else:
         """No-op for standalone mode."""
         return 0
 
-    def cleanup_stale_properties(max_age: float | None = None) -> int:
+    def cleanup_stale_properties() -> int:
         """No-op for standalone mode."""
         return 0

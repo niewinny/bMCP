@@ -82,7 +82,7 @@ class ServerManager:
         self._uvicorn_server = (
             None  # Direct reference to uvicorn.Server for shutdown control
         )
-        self._shutting_down = False
+        self._shutting_down = threading.Event()
         self._auth_token_masked = None  # Masked auth token for logging
         # Event for shutdown coordination: set() = shutdown complete (not in progress)
         # cleared = shutdown in progress. Used to prevent starting during shutdown.
@@ -232,6 +232,8 @@ class ServerManager:
             logger.info("MCP server initialized successfully")
             return mcp
 
+        except (ImportError, ModuleNotFoundError):
+            raise
         except (AttributeError, TypeError, ValueError) as e:
             logger.exception("Error initializing MCP server: %s", e)
             return None
@@ -254,8 +256,10 @@ class ServerManager:
         addon_prefs = None
         if _HAS_BPY:
             for addon_name, addon in bpy.context.preferences.addons.items():
-                if hasattr(addon, "preferences") and hasattr(
-                    addon.preferences, "server_port"
+                if (
+                    hasattr(addon, "preferences")
+                    and hasattr(addon.preferences, "server_port")
+                    and hasattr(addon.preferences, "auth_token")
                 ):
                     addon_prefs = addon
                     break
@@ -458,7 +462,7 @@ class ServerManager:
             logger.info("Server already running")
             return False
 
-        if self._shutting_down:
+        if self._shutting_down.is_set():
             logger.warning("Server is still shutting down, please wait a moment")
             return False
 
@@ -537,7 +541,7 @@ class ServerManager:
         if self._server_loop is not None:
             try:
                 # Mark as shutting down FIRST
-                self._shutting_down = True
+                self._shutting_down.set()
                 self._shutdown_complete.clear()
 
                 # Capture references for the shutdown thread
@@ -640,15 +644,15 @@ class ServerManager:
                         # Schedule clearing the shutdown flag
                         if _HAS_BPY:
                             def clear_flag():
-                                self._shutting_down = False
+                                self._shutting_down.clear()
                                 return None
 
                             try:
                                 bpy.app.timers.register(clear_flag, first_interval=0.3)
                             except Exception:
-                                self._shutting_down = False
+                                self._shutting_down.clear()
                         else:
-                            self._shutting_down = False
+                            self._shutting_down.clear()
 
                 shutdown_thread = threading.Thread(
                     target=graceful_shutdown, daemon=True
@@ -658,13 +662,13 @@ class ServerManager:
 
             except (RuntimeError, AttributeError) as e:
                 logger.error("Error stopping server: %s", e)
-                self._shutting_down = False
+                self._shutting_down.clear()
                 self._shutdown_complete.set()
                 return False
             except Exception as e:
                 logger.error("Unexpected error stopping server: %s", e)
                 traceback.print_exc()
-                self._shutting_down = False
+                self._shutting_down.clear()
                 self._shutdown_complete.set()
                 return False
         return False
@@ -681,7 +685,7 @@ class ServerManager:
 
     def is_shutting_down(self):
         """Check if the server is in the process of shutting down."""
-        return self._shutting_down
+        return self._shutting_down.is_set()
 
     def wait_for_shutdown(self, timeout=3.0):
         """Wait for shutdown to complete. Returns True if completed, False if timeout."""

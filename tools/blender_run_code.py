@@ -48,32 +48,10 @@ async def blender_run_code(ctx, code: str) -> str:
           print(f"Active: {bpy.context.active_object.name if bpy.context.active_object else None}")
           print(f"Selected: {[o.name for o in bpy.context.selected_objects]}")
     """
-    # Dual execution path: HTTP (direct) vs stdio (forwarded)
-    # Context is injected automatically (like FastAPI's Depends)
-
-    # Use the convenience method that handles both modes uniformly
+    # Context is injected automatically (like FastAPI's Depends).
+    # call_blender_operator normalizes the result from any transport into
+    # a uniform {"output": str, "error": str | None} dict.
     result = await ctx.call_blender_operator("blender_run_code", {"code": code})
 
-    if ctx.is_http_mode:
-        # HTTP mode: result is dict from operator
-        if not isinstance(result, dict):
-            raise RuntimeError(
-                f"Expected dict result in HTTP mode, got {type(result).__name__}"
-            )
-
-        if result.get("status") == "error":
-            error_msg = result.get("error", "Tool execution failed")
-            raise RuntimeError(error_msg)
-
-        output = result.get("output", "")
-        if not output:
-            output = "Code executed successfully (no output)"
-        return output
-    else:
-        # stdio mode: result is MCP response format
-        if isinstance(result, list) and len(result) > 0:
-            content_item = result[0]
-            if isinstance(content_item, dict) and content_item.get("type") == "text":
-                return content_item.get("text", "No output")
-
-        return str(result)
+    output = result.get("output", "")
+    return output if output else "Code executed successfully (no output)"

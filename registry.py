@@ -1,5 +1,7 @@
 """Registry module for managing Blender addon class registration."""
 
+import logging
+
 from bpy.utils import register_class, unregister_class
 
 from . import ops, preferences, ui
@@ -31,8 +33,8 @@ def unregister():
         if is_running() and not is_shutting_down():
             stop()
             wait(timeout=2.0)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.getLogger(__name__).warning("Error stopping server on unregister: %s", e)
 
     # 3. Unregister classes in reverse order
     for cls in reversed(classes):

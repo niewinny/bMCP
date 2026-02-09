@@ -20,7 +20,6 @@ from .config import (
     validate_port,
     validate_config,
     ConfigValidationResult,
-    clear_port_validation_cache,
 )
 
 # Lifecycle functions and classes are lazily imported to avoid triggering bpy.
@@ -30,13 +29,18 @@ _LAZY_TRANSPORT = frozenset({
 
 
 def __getattr__(name):
+    import importlib
+
     if name in _LAZY_TRANSPORT:
-        import importlib
         mod = importlib.import_module(".transport.http_server", "bmcp")
-        return getattr(mod, name)
+        attr = getattr(mod, name)
+        globals()[name] = attr
+        return attr
     if name == "MCPServer":
-        from .core import MCPServer
-        return MCPServer
+        mod = importlib.import_module(".core", "bmcp")
+        attr = mod.MCPServer
+        globals()[name] = attr
+        return attr
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -61,7 +65,6 @@ __all__ = [
     "validate_port",
     "validate_config",
     "ConfigValidationResult",
-    "clear_port_validation_cache",
     # Classes
     "ServerManager",
     "MCPServer",

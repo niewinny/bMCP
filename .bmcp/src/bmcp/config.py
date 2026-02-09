@@ -43,11 +43,6 @@ SSE_POLL_INTERVAL: float = 0.05  # 50ms polling for SSE queue
 _port_validation_cache: dict[tuple[str, int], bool] = {}
 
 
-def clear_port_validation_cache() -> None:
-    """Clear the port validation cache (useful after server stop)."""
-    _port_validation_cache.clear()
-
-
 @dataclass
 class ConfigValidationResult:
     """Result of configuration validation."""

@@ -28,6 +28,7 @@ import threading
 import time
 import uuid
 from collections import deque
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -36,6 +37,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
@@ -49,44 +51,40 @@ request_logger = get_logger("bmcp-requests")
 # Logger for authentication events
 auth_logger = get_logger("bmcp-auth")
 
-# Track background tasks for cleanup on shutdown
-_background_tasks: set[asyncio.Task] = set()
-
 # SSE session timeout (30 minutes)
 SSE_SESSION_TIMEOUT: float = 1800.0
 # SSE cleanup interval (5 minutes)
 SSE_CLEANUP_INTERVAL: float = 300.0
 
-# Reference to cleanup task for cancellation
-_cleanup_task: Optional[asyncio.Task] = None
-
-# Lock for thread-safe access to sse_queues dictionary
-_sse_queues_lock = threading.Lock()
-
 # Maximum request body size (10MB) to prevent DoS attacks
 MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
 
 
-async def cancel_background_tasks() -> int:
+async def cancel_background_tasks(app: Starlette) -> int:
     """Cancel all tracked background tasks (called on shutdown).
+
+    Args:
+        app: Starlette application instance.
 
     Returns:
         Number of tasks that were cancelled.
     """
-    global _cleanup_task
+    cleanup_task = app.state.cleanup_task
+    sse_queues_lock = app.state.sse_queues_lock
+    background_tasks = app.state.background_tasks
 
     # Cancel cleanup task first with timeout to prevent hanging
-    if _cleanup_task and not _cleanup_task.done():
-        _cleanup_task.cancel()
+    if cleanup_task and not cleanup_task.done():
+        cleanup_task.cancel()
         try:
-            await asyncio.wait_for(_cleanup_task, timeout=2.0)
+            await asyncio.wait_for(cleanup_task, timeout=2.0)
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 
     # Cancel all tracked tasks
-    with _sse_queues_lock:
-        count = len(_background_tasks)
-        tasks_to_cancel = list(_background_tasks)
+    with sse_queues_lock:
+        count = len(background_tasks)
+        tasks_to_cancel = list(background_tasks)
 
     for task in tasks_to_cancel:
         task.cancel()
@@ -95,22 +93,23 @@ async def cancel_background_tasks() -> int:
     if tasks_to_cancel:
         await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
 
-    with _sse_queues_lock:
-        _background_tasks.clear()
+    with sse_queues_lock:
+        background_tasks.clear()
     return count
 
 
-async def cleanup_stale_sse_sessions(sse_queues: dict) -> int:
+async def cleanup_stale_sse_sessions(sse_queues: dict, sse_queues_lock: threading.Lock) -> int:
     """Remove stale SSE sessions that haven't had activity.
 
     Args:
         sse_queues: Dictionary of session_id -> SSEQueue
+        sse_queues_lock: Lock for thread-safe access to sse_queues
 
     Returns:
         Number of sessions cleaned up.
     """
     now = time.time()
-    with _sse_queues_lock:
+    with sse_queues_lock:
         stale_sessions = [
             session_id
             for session_id, queue in sse_queues.items()
@@ -127,12 +126,12 @@ async def cleanup_stale_sse_sessions(sse_queues: dict) -> int:
     return len(stale_sessions)
 
 
-async def _sse_cleanup_loop(sse_queues: dict) -> None:
+async def _sse_cleanup_loop(sse_queues: dict, sse_queues_lock: threading.Lock) -> None:
     """Periodic cleanup task for stale SSE sessions."""
     while True:
         try:
             await asyncio.sleep(SSE_CLEANUP_INTERVAL)
-            await cleanup_stale_sse_sessions(sse_queues)
+            await cleanup_stale_sse_sessions(sse_queues, sse_queues_lock)
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -265,6 +264,23 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     )
             except ValueError:
                 pass
+
+        # Also enforce actual body size
+        if request.method in ("POST", "PUT", "PATCH"):
+            body = await request.body()
+            if len(body) > MAX_REQUEST_BODY_SIZE:
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {
+                            "code": -32600,
+                            "message": f"Request body too large. Maximum size is {MAX_REQUEST_BODY_SIZE // (1024 * 1024)}MB.",
+                        },
+                    },
+                    status_code=413,
+                )
+
         return await call_next(request)
 
 
@@ -421,8 +437,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             clear_request_id()
 
 
-async def health_endpoint(request):
+async def health_endpoint(request: Request):
     """Health check endpoint - no auth required for monitoring tools."""
+    mcp_server = request.app.state.mcp_server
+    start_time = getattr(request.app.state, "start_time", time.time())
+
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "uptime_seconds": round(time.time() - start_time, 2),
+        }
+    )
+
+
+async def debug_endpoint(request: Request):
+    """Debug endpoint with detailed server stats - requires auth."""
     mcp_server = request.app.state.mcp_server
     sse_queues = request.app.state.sse_queues
     start_time = getattr(request.app.state, "start_time", time.time())
@@ -440,17 +469,19 @@ async def health_endpoint(request):
             "server": {
                 "name": mcp_server.name,
                 "version": "1.0.0",
-                "tools_count": len(mcp_server._tool_cache),
-                "resources_count": len(mcp_server._resource_cache),
+                "tools_count": mcp_server.tool_count,
+                "resources_count": mcp_server.resource_count,
             },
         }
     )
 
 
-async def sse_endpoint(request):
+async def sse_endpoint(request: Request):
     """SSE endpoint for MCP-over-SSE transport (/sse)."""
     mcp_server = request.app.state.mcp_server
     sse_queues = request.app.state.sse_queues
+    sse_queues_lock = request.app.state.sse_queues_lock
+    background_tasks = request.app.state.background_tasks
 
     if request.method == "POST":
         try:
@@ -461,7 +492,7 @@ async def sse_endpoint(request):
 
             session_id = request.headers.get("X-MCP-Session-ID")
 
-            with _sse_queues_lock:
+            with sse_queues_lock:
                 has_session = session_id and session_id in sse_queues
             if has_session:
                 async def process_and_queue():
@@ -475,7 +506,7 @@ async def sse_endpoint(request):
                             "error": {"code": -32603, "message": str(e)},
                         }
 
-                    with _sse_queues_lock:
+                    with sse_queues_lock:
                         queue = sse_queues.get(session_id)
                     if queue:
                         try:
@@ -484,9 +515,9 @@ async def sse_endpoint(request):
                             pass
 
                 task = asyncio.create_task(process_and_queue())
-                with _sse_queues_lock:
-                    _background_tasks.add(task)
-                task.add_done_callback(lambda t: _background_tasks.discard(t))
+                with sse_queues_lock:
+                    background_tasks.add(task)
+                task.add_done_callback(lambda t: background_tasks.discard(t))
 
                 return Response(status_code=202)
             else:
@@ -522,7 +553,7 @@ async def sse_endpoint(request):
             messages=deque(maxlen=SSE_QUEUE_SIZE),
             _loop=asyncio.get_running_loop(),
         )
-        with _sse_queues_lock:
+        with sse_queues_lock:
             sse_queues[session_id] = message_queue
 
         try:
@@ -550,13 +581,13 @@ async def sse_endpoint(request):
         except asyncio.CancelledError:
             pass
         finally:
-            with _sse_queues_lock:
+            with sse_queues_lock:
                 sse_queues.pop(session_id, None)
 
     return EventSourceResponse(event_generator())
 
 
-async def rpc_endpoint(request):
+async def rpc_endpoint(request: Request):
     """JSON-RPC endpoint for plain HTTP transport (/http)."""
     mcp_server = request.app.state.mcp_server
 
@@ -663,9 +694,35 @@ def create_asgi_app(
         ]
         allow_credentials = True
 
+    @asynccontextmanager
+    async def lifespan(app: Starlette):
+        # Initialize mutable state on app.state
+        app.state.background_tasks = set()
+        app.state.cleanup_task = None
+        app.state.sse_queues_lock = threading.Lock()
+        app.state.sse_queues = {}
+        app.state.start_time = time.time()
+        app.state.stats = {"request_count": 0, "error_count": 0}
+        app.state.mcp_server = mcp_server
+        app.state.is_shutting_down = is_shutting_down_fn or (lambda: False)
+
+        # Start cleanup task
+        app.state.cleanup_task = asyncio.create_task(
+            _sse_cleanup_loop(app.state.sse_queues, app.state.sse_queues_lock)
+        )
+        request_logger.debug("Started SSE session cleanup task")
+
+        yield
+
+        # Shutdown
+        count = await cancel_background_tasks(app)
+        if count > 0:
+            request_logger.debug("Cancelled %d background tasks on shutdown", count)
+
     app = Starlette(
         routes=[
             Route("/health", health_endpoint, methods=["GET"]),
+            Route("/debug", debug_endpoint, methods=["GET"]),
             Route("/sse", sse_endpoint, methods=["GET", "POST"]),
             Route("/http", rpc_endpoint, methods=["POST"]),
         ],
@@ -688,24 +745,7 @@ def create_asgi_app(
                 network_access=(host == "0.0.0.0"),
             ),
         ],
+        lifespan=lifespan,
     )
-
-    app.state.mcp_server = mcp_server
-    app.state.sse_queues = {}
-    app.state.start_time = time.time()
-    app.state.stats = {"request_count": 0, "error_count": 0}
-    app.state.is_shutting_down = is_shutting_down_fn or (lambda: False)
-
-    @app.on_event("startup")
-    async def startup_event():
-        global _cleanup_task
-        _cleanup_task = asyncio.create_task(_sse_cleanup_loop(app.state.sse_queues))
-        request_logger.debug("Started SSE session cleanup task")
-
-    @app.on_event("shutdown")
-    async def shutdown_event():
-        count = await cancel_background_tasks()
-        if count > 0:
-            request_logger.debug("Cancelled %d background tasks on shutdown", count)
 
     return app

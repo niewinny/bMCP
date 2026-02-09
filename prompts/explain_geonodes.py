@@ -4,8 +4,6 @@ Explain Geometry Nodes Prompt
 Provides a structured prompt for explaining selected geometry nodes.
 """
 
-from typing import List
-
 from bmcp import prompt
 
 # Valid focus values for the explain_geonodes prompt
@@ -13,7 +11,7 @@ VALID_FOCUS_VALUES = {"all", "inputs", "outputs", "flow", "optimization"}
 
 
 @prompt
-def explain_geonodes(focus: str = "all") -> List[dict]:
+def explain_geonodes(focus: str = "all") -> list[dict]:
     """Explain selected geometry nodes in detail.
 
     Args:

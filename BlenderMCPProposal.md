@@ -70,32 +70,32 @@ Location: <Vector (0.0000, 0.0000, 0.0000)>
                                                             │
                                                             ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│                    execute_on_main_thread()                       │
-│  1. Generate UUID job_id                                          │
-│  2. Create threading.Event()                                      │
-│  3. Register ResultQueue entry                                    │
+│                    execute_on_main_thread()                      │
+│  1. Generate UUID job_id                                         │
+│  2. Create threading.Event()                                     │
+│  3. Register ResultQueue entry                                   │
 │  4. Schedule timer: bpy.app.timers.register(run_on_main_thread)  │
-│  5. Wait on Event (5 min timeout)                                 │
+│  5. Wait on Event (5 min timeout)                                │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│                    MAIN THREAD (Timer fires)                      │
-│  1. Check if job cancelled (timeout)                              │
+│                    MAIN THREAD (Timer fires)                     │
+│  1. Check if job cancelled (timeout)                             │
 │  2. Execute: bpy.ops.bmcp.run_code(code=..., job_id=...)         │
-│  3. Operator: ast.parse → compile → exec                          │
-│  4. Capture stdout to buffer                                      │
+│  3. Operator: ast.parse → compile → exec                         │
+│  4. Capture stdout to buffer                                     │
 │  5. Store result: window_manager["mcp_result_{job_id}"]          │
-│  6. Signal completion: event.set()                                │
+│  6. Signal completion: event.set()                               │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ↓
 ┌──────────────────────────────────────────────────────────────────┐
-│                    BACKGROUND THREAD (Resumes)                    │
-│  1. Read result from window_manager                               │
-│  2. Parse JSON result                                             │
-│  3. Clean up properties immediately                               │
-│  4. Return MCP response to client                                 │
+│                    BACKGROUND THREAD (Resumes)                   │
+│  1. Read result from window_manager                              │
+│  2. Parse JSON result                                            │
+│  3. Clean up properties immediately                              │
+│  4. Return MCP response to client                                │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -120,12 +120,12 @@ That's it! agents now see new tool and can use it.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                       BLENDER PROCESS                            │
-│                                                                  │
+│                       BLENDER PROCESS                           │
+│                                                                 │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │                  MAIN THREAD (Blender)                     │ │
 │  │                                                            │ │
-│  │   bpy.app.timers ──→ Operators ──→ WindowManager Props    │ │
+│  │   bpy.app.timers ──→ Operators ──→ WindowManager Props     │ │
 │  │         ↑                              ↓                   │ │
 │  └─────────┼──────────────────────────────┼───────────────────┘ │
 │            │ Timer Registration           │ Property Read       │
@@ -133,22 +133,22 @@ That's it! agents now see new tool and can use it.
 │  │         │    BACKGROUND THREAD         │                   │ │
 │  │         │    (Asyncio Event Loop)      │                   │ │
 │  │         │                              ↓                   │ │
-│  │  ┌──────────────────────────────────────────────────────┐ │ │
-│  │  │                 ServerManager                         │ │ │
-│  │  │                      ↓                                │ │ │
-│  │  │  Uvicorn ──→ ASGI App (Starlette)                    │ │ │
-│  │  │                      ↓                                │ │ │
-│  │  │              Middleware Stack                         │ │ │
-│  │  │     (CORS → Auth → Shutdown → Stats → Logging)       │ │ │
-│  │  │                      ↓                                │ │ │
-│  │  │              Routes: /health /sse /http               │ │ │
-│  │  │                      ↓                                │ │ │
-│  │  │           handlers.py (JSON-RPC)                      │ │ │
-│  │  │                      ↓                                │ │ │
-│  │  │           MCPServer (core.py)                         │ │ │
-│  │  │                      ↓                                │ │ │
-│  │  │      Decorator Registries (@tool @resource @prompt)   │ │ │
-│  │  └──────────────────────────────────────────────────────┘ │ │
+│  │  ┌──────────────────────────────────────────────────────┐  │ │
+│  │  │                 ServerManager                        │  │ │
+│  │  │                      ↓                               │  │ │
+│  │  │  Uvicorn ──→ ASGI App (Starlette)                    │  │ │
+│  │  │                      ↓                               │  │ │
+│  │  │              Middleware Stack                        │  │ │
+│  │  │     (CORS → Auth → Shutdown → Stats → Logging)       │  │ │
+│  │  │                      ↓                               │  │ │
+│  │  │              Routes: /health /sse /http              │  │ │
+│  │  │                      ↓                               │  │ │
+│  │  │           handlers.py (JSON-RPC)                     │  │ │
+│  │  │                      ↓                               │  │ │
+│  │  │           MCPServer (core.py)                        │  │ │
+│  │  │                      ↓                               │  │ │
+│  │  │      Decorator Registries (@tool @resource @prompt)  │  │ │
+│  │  └──────────────────────────────────────────────────────┘  │ │
 │  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
                               ↑
@@ -200,4 +200,4 @@ Made as extension, and following all best practicies.
 ## Why This Extension Is Different From other MCP addosn
 - **Core stuff written no need for 30mb dependencies**
 - **Modern Aprouch to MCP servers. Small amount of tools, support for resources and propmts**
-- **Support for all protocols in one place, no matter waht agent you use it will connect** 
+- **Support for all protocols in one place, no matter waht agent you use it will connect**

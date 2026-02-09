@@ -250,7 +250,7 @@ async def handle_prompts_get(mcp_server, params: dict) -> dict:
 
     with RequestTimer(logger, f"prompt/{name}"):
         try:
-            result = mcp_server.get_prompt(name, arguments)
+            result = await mcp_server.get_prompt(name, arguments)
             # result is {"description": str, "messages": [...]}
             return result
 

@@ -126,7 +126,7 @@ _connection_pool_lock = threading.Lock()
 
 
 def forward_to_blender(
-    message: dict, endpoint: str, retries: int = MAX_RETRIES
+    message: dict, endpoint: str, retries: int = MAX_RETRIES, auth_token: str = ""
 ) -> Optional[dict]:
     """
     Forward a JSON-RPC message to the HTTP server.
@@ -137,6 +137,7 @@ def forward_to_blender(
         message: JSON-RPC message dictionary
         endpoint: HTTP endpoint URL
         retries: Number of retries for transient failures
+        auth_token: Optional Bearer token for authentication
 
     Returns:
         JSON-RPC response dictionary (or None for notifications)
@@ -152,6 +153,8 @@ def forward_to_blender(
         "Accept": "application/json",
         "User-Agent": "bmcp-stdio-bridge/1.0",
     }
+    if auth_token:
+        headers["Authorization"] = f"Bearer {auth_token}"
 
     # Parse endpoint to get path
     parsed = urllib.parse.urlparse(endpoint)
@@ -293,12 +296,13 @@ def forward_to_blender(
     }
 
 
-def run_stdio_bridge(endpoint: str):
+def run_stdio_bridge(endpoint: str, auth_token: str = ""):
     """
     Run the stdio bridge that forwards messages between stdin/stdout and HTTP.
 
     Args:
         endpoint: HTTP endpoint URL
+        auth_token: Optional Bearer token for authentication
     """
     global _connection_pool
 
@@ -323,7 +327,7 @@ def run_stdio_bridge(endpoint: str):
                 message = json.loads(line)
                 logger.debug("Received message: %s", message.get("method", "unknown"))
 
-                response = forward_to_blender(message, endpoint)
+                response = forward_to_blender(message, endpoint, auth_token=auth_token)
 
                 if response is not None:
                     try:
@@ -376,6 +380,11 @@ def parse_args():
         help=f"HTTP server port (default: {DEFAULT_BLENDER_PORT})",
     )
     parser.add_argument(
+        "--token",
+        default="",
+        help="Authentication token to include as Bearer token in requests",
+    )
+    parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging to stderr"
     )
     return parser.parse_args()
@@ -399,7 +408,7 @@ def main():
     logger.debug("Ready to forward messages")
     logger.debug("=" * 60)
 
-    run_stdio_bridge(endpoint)
+    run_stdio_bridge(endpoint, auth_token=args.token)
 
 
 if __name__ == "__main__":

@@ -41,18 +41,19 @@ class ToolContext:
         """
         Call a Blender operator/tool through the execution bridge.
 
-        This is a convenience wrapper around execute_fn that handles
-        both HTTP and stdio modes uniformly.
+        Normalizes the result from both HTTP and stdio transports into a
+        uniform dict with ``{"output": str, "error": str | None}``.
 
         Args:
             tool_name: Name of the Blender tool to call
             arguments: Tool arguments dict
 
         Returns:
-            Tool execution result dict
+            Normalized dict: ``{"output": ..., "error": ...}``
 
         Raises:
             RuntimeError: If context not initialized via set_context()
+            RuntimeError: If the operator reports an error
 
         Usage:
             async def my_tool(ctx: ToolContext, code: str) -> str:
@@ -60,7 +61,7 @@ class ToolContext:
                     "blender_run_code",
                     {"code": code}
                 )
-                return result.get("output", "")
+                return result["output"]
         """
         if self.execute_fn is None:
             raise RuntimeError(
@@ -69,14 +70,46 @@ class ToolContext:
 
         if self.is_http_mode:
             # HTTP mode: execute through thread bridge
-            result = await self.anyio_module.to_thread.run_sync(
+            raw = await self.anyio_module.to_thread.run_sync(
                 self.execute_fn, tool_name, arguments
             )
-            return result
         else:
             # stdio mode: forward to bridge
-            result = await self.execute_fn(tool_name, arguments)
-            return result
+            raw = await self.execute_fn(tool_name, arguments)
+
+        return self._normalize_result(raw)
+
+    @staticmethod
+    def _normalize_result(raw: Any) -> dict[str, Any]:
+        """
+        Normalize a transport result into ``{"output": str, "error": str | None}``.
+
+        Handles:
+        - dict with "output"/"error"/"status" keys (HTTP mode)
+        - list of MCP content items ``[{"type": "text", "text": ...}]`` (stdio mode)
+        - plain str or other types (fallback)
+
+        Raises:
+            RuntimeError: If the result carries an error status.
+        """
+        if isinstance(raw, dict):
+            if raw.get("status") == "error":
+                raise RuntimeError(raw.get("error", "Tool execution failed"))
+            return {
+                "output": raw.get("output", ""),
+                "error": None,
+            }
+
+        if isinstance(raw, list) and raw:
+            first = raw[0]
+            if isinstance(first, dict) and first.get("type") == "text":
+                return {
+                    "output": first.get("text", ""),
+                    "error": None,
+                }
+
+        # Fallback: stringify
+        return {"output": str(raw) if raw else "", "error": None}
 
 
 # Global context instance shared across all threads

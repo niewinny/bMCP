@@ -4,6 +4,8 @@ Shared utilities for resource modules.
 Provides common helper functions used across multiple resource files.
 """
 
+__all__ = ["format_socket_value"]
+
 
 def format_socket_value(socket) -> str:
     """

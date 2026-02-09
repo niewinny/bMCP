@@ -136,6 +136,16 @@ class MCPServer:
             }
             logger.debug("  Synced prompt: %s", reg.name)
 
+    @property
+    def tool_count(self) -> int:
+        """Number of registered tools."""
+        return len(self._tool_cache)
+
+    @property
+    def resource_count(self) -> int:
+        """Number of registered resources."""
+        return len(self._resource_cache)
+
     def clear(self):
         """Clear all cached tools, resources, and prompts (called on server stop)."""
         self._tool_cache.clear()
@@ -351,7 +361,7 @@ class MCPServer:
             prompts.append(prompt_entry)
         return prompts
 
-    def get_prompt(self, name: str, arguments: dict) -> dict:
+    async def get_prompt(self, name: str, arguments: dict) -> dict:
         """
         Execute a prompt handler and return messages.
 
@@ -368,8 +378,11 @@ class MCPServer:
         prompt_data = self._prompt_cache[name]
         handler = prompt_data["handler"]
 
-        # Call handler with arguments
-        messages = handler(**arguments)
+        # Handle both sync and async prompt handlers
+        if inspect.iscoroutinefunction(handler):
+            messages = await handler(**arguments)
+        else:
+            messages = handler(**arguments)
 
         return {"description": prompt_data["description"], "messages": messages}
 

@@ -59,6 +59,7 @@ class ResultQueue:
     def __init__(self):
         self._queue: dict[str, JobEntry] = {}
         self._lock = threading.Lock()
+        self._last_cleanup_time: float = time.time()
 
     def register(self, job_id: str) -> threading.Event:
         """
@@ -72,8 +73,10 @@ class ResultQueue:
         Returns:
             threading.Event that will be set when the job completes
         """
-        # Clean up expired jobs periodically (every 10 registrations)
-        if len(self) > 0 and len(self) % 10 == 0:
+        # Clean up expired jobs periodically (every 60 seconds)
+        now = time.time()
+        if len(self) > 0 and now - self._last_cleanup_time > 60.0:
+            self._last_cleanup_time = now
             self.cleanup_expired_jobs()
 
         with self._lock:
