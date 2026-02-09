@@ -35,7 +35,6 @@ class BMCP_OT_get_resources(bpy.types.Operator):
     )
 
     def execute(self, context) -> set:
-        # Validate context is available
         if context is None or context.window_manager is None:
             self.report({"ERROR"}, "Invalid context: window_manager not available")
             return {"CANCELLED"}
@@ -50,7 +49,6 @@ class BMCP_OT_get_resources(bpy.types.Operator):
         context.window_manager.pop(error_key, None)
 
         try:
-            # Find handler for this URI
             handler = None
             for reg in iter_resources():
                 if reg.uri == self.uri:
@@ -64,14 +62,11 @@ class BMCP_OT_get_resources(bpy.types.Operator):
                 self.report({"ERROR"}, error_msg)
                 return {"CANCELLED"}
 
-            # Execute handler (sync function)
             result = handler()
 
-            # Validate result is a string
             if not isinstance(result, str):
                 result = str(result)
 
-            # Truncate if too large - provide clear warning with details
             if len(result) > MAX_OUTPUT_SIZE:
                 original_size = len(result)
                 result = (

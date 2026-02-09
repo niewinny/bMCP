@@ -36,7 +36,6 @@ def selected_objects() -> str:
         info += f"- **Scale**: {[round(x, 3) for x in obj.scale]}\n"
         info += f"- **Dimensions**: {[round(x, 3) for x in obj.dimensions]}\n"
 
-        # Hierarchy
         if obj.parent:
             info += f"- **Parent**: {obj.parent.name} ({obj.parent.type})\n"
             info += f"- **Parent Type**: {obj.parent_type}\n"
@@ -44,16 +43,13 @@ def selected_objects() -> str:
         if obj.children:
             info += f"- **Children** ({len(obj.children)}): {', '.join([c.name for c in obj.children])}\n"
 
-        # Visibility
         info += f"- **Viewport Visible**: {not obj.hide_viewport}\n"
         info += f"- **Render Visible**: {not obj.hide_render}\n"
         info += f"- **Selectable**: {not obj.hide_select}\n"
 
-        # Collections
         if obj.users_collection:
             info += f"- **Collections**: {', '.join([col.name for col in obj.users_collection])}\n"
 
-        # Type-specific info (with null checks for obj.data)
         if obj.type == "MESH" and obj.data:
             mesh = obj.data
             info += f"\n**Mesh Data**: {mesh.name}\n"
@@ -103,7 +99,6 @@ def selected_objects() -> str:
             info += f"\n**Empty Type**: {obj.empty_display_type}\n"
             info += f"- Display Size: {obj.empty_display_size}\n"
 
-        # Modifiers
         if obj.modifiers:
             info += f"\n**Modifiers** ({len(obj.modifiers)}):\n"
             for mod in obj.modifiers:
@@ -114,7 +109,6 @@ def selected_objects() -> str:
                     info += " [Hidden in Render]"
                 info += "\n"
 
-                # Add relevant modifier settings
                 if mod.type == "SUBSURF":
                     info += f"    - Levels Viewport: {mod.levels}, Render: {mod.render_levels}\n"
                 elif mod.type == "ARRAY":
@@ -127,7 +121,6 @@ def selected_objects() -> str:
                     info += f"    - Width: {mod.width}\n"
                     info += f"    - Segments: {mod.segments}\n"
 
-        # Constraints
         if obj.constraints:
             info += f"\n**Constraints** ({len(obj.constraints)}):\n"
             for con in obj.constraints:
@@ -136,11 +129,9 @@ def selected_objects() -> str:
                     info += " [Muted]"
                 info += "\n"
 
-                # Add target info if available
                 if hasattr(con, "target") and con.target:
                     info += f"    - Target: {con.target.name}\n"
 
-        # Animation
         if obj.animation_data:
             if obj.animation_data.action:
                 action = obj.animation_data.action
@@ -152,7 +143,6 @@ def selected_objects() -> str:
             if obj.animation_data.nla_tracks:
                 info += f"  - NLA Tracks: {len(obj.animation_data.nla_tracks)}\n"
 
-        # Custom properties
         custom_props = [key for key in obj.keys() if key != "_RNA_UI"]
         if custom_props:
             info += f"\n**Custom Properties**: {', '.join(custom_props)}\n"
@@ -169,7 +159,6 @@ def selected_objects() -> str:
             + mode
         )
 
-    # Check for too many selected objects
     total_selected = len(selected)
     if total_selected > MAX_SELECTED_OBJECTS:
         output = f"# Selected Objects ({total_selected:,} total)\n\n"
@@ -186,13 +175,11 @@ def selected_objects() -> str:
     output = f"# Selected Objects ({len(selected)} total)\n\n"
     output += f"**Current Mode**: {mode}\n\n"
 
-    # Active object first
     if active and active in selected:
         output += f"## ACTIVE: {active.name}\n\n"
         output += _format_object_info(active)
         output += "\n---\n\n"
 
-    # Other selected objects
     other_objects = [obj for obj in selected if obj != active]
     if other_objects:
         output += "## Other Selected Objects\n\n"

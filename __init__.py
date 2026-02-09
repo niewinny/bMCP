@@ -16,10 +16,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 def register():
     """Register Blender addon classes."""
-    # Import Blender-specific tools/resources/prompts (triggers @decorator registration)
+    # Importing triggers @decorator registration of tools/resources/prompts
     from . import prompts, resources, tools  # noqa: F401
 
-    # Register Blender classes
     from . import registry
 
     registry.register()

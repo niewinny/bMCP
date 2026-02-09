@@ -35,7 +35,6 @@ class BMCP_OT_run_code(Operator):
 
     def execute(self, context) -> set:
         """Execute the provided Python code"""
-        # Validate context is available
         if context is None or context.window_manager is None:
             self.report({"ERROR"}, "Invalid context: window_manager not available")
             return {"CANCELLED"}
@@ -69,7 +68,6 @@ class BMCP_OT_run_code(Operator):
             # Security is handled at the transport layer (auth token + localhost-only by default).
             compiled_code = compile(tree, "<ai-code>", "exec")
 
-            # Redirect stdout to capture output
             buffer = io.StringIO()
             sys.stdout = buffer
             stdout_redirected = True
@@ -79,7 +77,6 @@ class BMCP_OT_run_code(Operator):
 
             output = buffer.getvalue()
 
-            # Truncate output if too large - provide clear warning with details
             if len(output) > MAX_OUTPUT_SIZE:
                 original_size = len(output)
                 output = (
@@ -96,9 +93,6 @@ class BMCP_OT_run_code(Operator):
             }
             context.window_manager[result_key] = json.dumps(result_dict)
 
-            # Note: UNDO support is handled via bl_options = {"INTERNAL", "UNDO"}
-            # Blender automatically creates undo steps for operators with UNDO flag
-
             return {"FINISHED"}
 
         except Exception as e:
@@ -107,7 +101,6 @@ class BMCP_OT_run_code(Operator):
             return {"CANCELLED"}
 
         finally:
-            # ALWAYS restore stdout, even if an exception occurred
             if stdout_redirected:
                 try:
                     sys.stdout = old_stdout

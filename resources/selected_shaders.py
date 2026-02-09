@@ -118,7 +118,6 @@ def selected_shaders() -> str:
         SOCKET_PATTERNS,
     )
 
-    # Get all nodes
     all_nodes = list(node_tree.nodes)
     selected_nodes = [n for n in all_nodes if n.select]
     active_node = node_tree.nodes.active
@@ -129,7 +128,6 @@ def selected_shaders() -> str:
     )
     output += format_node_type_stats(all_nodes, NODE_PURPOSES)
 
-    # Output nodes
     output_nodes = [n for n in all_nodes if n.type == "OUTPUT_MATERIAL"]
     if output_nodes:
         output += "## Material Output Nodes\n\n"
@@ -156,7 +154,6 @@ def selected_shaders() -> str:
 
         output += "\n"
 
-    # BSDF shaders
     bsdf_nodes = [n for n in all_nodes if "BSDF" in n.type]
     if bsdf_nodes:
         output += f"## BSDF Shader Nodes ({len(bsdf_nodes)})\n\n"
@@ -191,7 +188,6 @@ def selected_shaders() -> str:
 
         output += "\n"
 
-    # Texture nodes
     texture_nodes = [n for n in all_nodes if n.type.startswith("TEX_")]
     if texture_nodes:
         output += f"## Texture Nodes ({len(texture_nodes)})\n\n"
@@ -221,11 +217,9 @@ def selected_shaders() -> str:
 
         output += "\n"
 
-    # Active node details
     if active_node:
         output += format_active_node_base(active_node)
 
-        # Shader-specific active node attributes
         if active_node.type == "VALTORGB":
             output += (
                 f"- **Interpolation**: {active_node.color_ramp.interpolation}\n"
@@ -255,7 +249,6 @@ def selected_shaders() -> str:
         output += format_active_node_outputs(active_node)
         output += "\n"
 
-    # Other selected nodes
     other_selected = [n for n in selected_nodes if n != active_node]
     if other_selected:
         output += f"## Other Selected Nodes ({len(other_selected)})\n\n"

@@ -40,7 +40,6 @@ def selected_mesh() -> str:
     output += f"**Mesh Data**: {mesh.name}\n"
     output += f"**Current Mode**: {mode}\n\n"
 
-    # Basic mesh statistics
     output += "## Mesh Statistics\n\n"
     output += f"- **Vertices**: {len(mesh.vertices)}\n"
     output += f"- **Edges**: {len(mesh.edges)}\n"
@@ -56,9 +55,8 @@ def selected_mesh() -> str:
     # - Do NOT call bmesh.update_edit_mesh() since we only read, never modify
     # This is different from bmesh.new() or bmesh.from_mesh() which create
     # copies that MUST be freed.
-    bm = None  # Initialize BMesh variable for later reuse
+    bm = None
     if mode == "EDIT_MESH":
-        # Safety check: prevent hanging on huge meshes
         if len(mesh.vertices) > MAX_VERTICES:
             output += "- **Loose Vertices**: N/A (mesh too large)\n"
             output += "- **Loose Edges**: N/A (mesh too large)\n"
@@ -69,16 +67,13 @@ def selected_mesh() -> str:
                 "Use `blender_run_code` tool for custom queries on large meshes.\n"
             )
         else:
-            # Create BMesh once and reuse for all edit mode operations
             bm = bmesh.from_edit_mesh(mesh)
 
-            # Calculate loose vertices/edges efficiently using BMesh properties
             loose_verts = sum(1 for v in bm.verts if not v.link_edges)
             loose_edges = sum(1 for e in bm.edges if not e.link_faces)
             output += f"- **Loose Vertices**: {loose_verts}\n"
             output += f"- **Loose Edges**: {loose_edges}\n"
 
-            # Edit mode selection details (reusing same BMesh instance)
             output += "\n## Edit Mode Selection\n\n"
 
             selected_verts = [v for v in bm.verts if v.select]
@@ -92,7 +87,6 @@ def selected_mesh() -> str:
                 f"- **Selected Faces**: {len(selected_faces)} / {len(bm.faces)}\n"
             )
 
-            # Extract active element once to avoid AttributeError
             active_elem = bm.select_history.active
             if active_elem and isinstance(active_elem, bmesh.types.BMVert):
                 output += f"- **Active Vertex**: {active_elem.index}\n"
@@ -111,7 +105,6 @@ def selected_mesh() -> str:
             else:
                 output += "- **Active Face**: None\n"
 
-            # Selection mode
             select_mode = bpy.context.tool_settings.mesh_select_mode
             mode_names = []
             if select_mode[0]:
@@ -122,7 +115,6 @@ def selected_mesh() -> str:
                 mode_names.append("Face")
             output += f"- **Selection Mode**: {', '.join(mode_names)}\n"
 
-            # Mesh elements info for selected items
             if selected_verts and len(selected_verts) <= 20:
                 output += f"\n**Selected Vertex Indices**: {[v.index for v in selected_verts]}\n"
 
@@ -133,11 +125,9 @@ def selected_mesh() -> str:
                     output += f"Normal: ({face.normal.x:.2f}, {face.normal.y:.2f}, {face.normal.z:.2f}), "
                     output += f"Area: {face.calc_area():.4f}\n"
     else:
-        # Object mode - no BMesh available
         output += "- **Loose Vertices**: N/A (enter edit mode for analysis)\n"
         output += "- **Loose Edges**: N/A (enter edit mode for analysis)\n"
 
-    # UV Maps
     if mesh.uv_layers:
         output += f"\n## UV Maps ({len(mesh.uv_layers)})\n\n"
         for i, uv_layer in enumerate(mesh.uv_layers):
@@ -153,7 +143,6 @@ def selected_mesh() -> str:
             )
             output += f"{i + 1}. {attr.name} (Domain: {attr.domain}, Type: {attr.data_type}) {marker}\n"
 
-    # Vertex Groups
     if obj.vertex_groups:
         output += f"\n## Vertex Groups ({len(obj.vertex_groups)})\n\n"
         for i, vg in enumerate(obj.vertex_groups):
@@ -162,7 +151,6 @@ def selected_mesh() -> str:
             )
             output += f"{i + 1}. {vg.name} (Index: {vg.index}) {marker}\n"
 
-    # Shape Keys
     if mesh.shape_keys:
         output += f"\n## Shape Keys ({len(mesh.shape_keys.key_blocks)})\n\n"
         output += f"- **Use Relative**: {mesh.shape_keys.use_relative}\n"
@@ -177,7 +165,6 @@ def selected_mesh() -> str:
                 output += " [Muted]"
             output += f" {marker}\n"
 
-    # Materials
     if mesh.materials:
         output += f"\n## Material Slots ({len(mesh.materials)})\n\n"
         for i, mat in enumerate(mesh.materials):
@@ -205,7 +192,6 @@ def selected_mesh() -> str:
             else:
                 output += f"{i + 1}. (Empty material slot)\n"
 
-    # Custom Attributes
     if hasattr(mesh, "attributes"):
         custom_attrs = [
             attr for attr in mesh.attributes if not attr.name.startswith(".")
@@ -215,7 +201,6 @@ def selected_mesh() -> str:
             for attr in custom_attrs:
                 output += f"- **{attr.name}**: Domain={attr.domain}, Type={attr.data_type}\n"
 
-    # Normals settings
     output += "\n## Normals\n\n"
     if hasattr(mesh, "use_auto_smooth"):
         # Blender 4.0 and earlier
@@ -226,17 +211,14 @@ def selected_mesh() -> str:
         # Blender 4.1+ - auto smooth moved to modifiers
         output += "- **Auto Smooth**: N/A (Blender 4.1+ uses modifier system)\n"
 
-    # Remesh settings (if any)
     if hasattr(mesh, "remesh_mode"):
         output += "\n## Remesh Settings\n\n"
         output += f"- **Mode**: {mesh.remesh_mode}\n"
         output += f"- **Voxel Size**: {mesh.remesh_voxel_size}\n"
 
-    # Mesh validation info (reuse BMesh if available)
     output += "\n## Validation Info\n\n"
 
     if bm is not None:
-        # Reuse existing BMesh from edit mode section
         non_manifold_edges = [e for e in bm.edges if not e.is_manifold]
         output += f"- **Non-Manifold Edges**: {len(non_manifold_edges)}\n"
 
@@ -248,10 +230,8 @@ def selected_mesh() -> str:
         tris = [f for f in bm.faces if len(f.verts) == 3]
         output += f"- **Triangles**: {len(tris)}\n"
     elif mode == "EDIT_MESH":
-        # Edit mode but mesh was too large - skipped BMesh creation
         output += "- **Validation skipped** - mesh too large\n"
     else:
-        # Object mode - no validation available
         output += "- **Validation not available** - enter edit mode\n"
 
     return output

@@ -29,10 +29,8 @@ def active_scene() -> str:
     """
     scene = bpy.context.scene
 
-    # Start building markdown output
     output = f"# Current Scene: {scene.name}\n\n"
 
-    # Timeline
     output += f"""## Timeline
 - Current Frame: {scene.frame_current}
 - Frame Range: {scene.frame_start} - {scene.frame_end}
@@ -40,14 +38,12 @@ def active_scene() -> str:
 
 """
 
-    # Render Settings
     output += f"""## Render Settings
 - Engine: {scene.render.engine}
 - Resolution: {scene.render.resolution_x}x{scene.render.resolution_y} ({scene.render.resolution_percentage}%)
 
 """
 
-    # Active Camera
     output += "## Active Camera\n"
     if scene.camera:
         cam = scene.camera
@@ -59,11 +55,9 @@ def active_scene() -> str:
     else:
         output += "- No active camera\n"
 
-    # Objects
     objects = list(scene.objects)
     total_count = len(objects)
 
-    # Limit objects to prevent hanging on huge scenes
     if total_count > MAX_OBJECTS:
         output += f"\n## Objects ({total_count:,} total - showing first {MAX_OBJECTS})\n\n"
         output += "**WARNING: Scene has too many objects** - showing limited data for performance.\n"
@@ -74,7 +68,6 @@ def active_scene() -> str:
     else:
         output += f"\n## Objects ({total_count} total)\n\n"
 
-    # Group by type
     by_type = {}
     for obj in objects:
         if obj.type not in by_type:

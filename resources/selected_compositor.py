@@ -78,7 +78,6 @@ def selected_compositor() -> str:
     output = "# Compositor\n\n"
     output += f"**Scene**: {scene.name}\n"
 
-    # Render settings context
     output += f"**Resolution**: {scene.render.resolution_x}x{scene.render.resolution_y}\n"
     output += f"**Frame Range**: {scene.frame_start} - {scene.frame_end}\n"
     output += f"**Current Frame**: {scene.frame_current}\n\n"
@@ -89,7 +88,6 @@ def selected_compositor() -> str:
         SOCKET_PATTERNS,
     )
 
-    # Get all nodes
     all_nodes = list(node_tree.nodes)
     selected_nodes = [n for n in all_nodes if n.select]
     active_node = node_tree.nodes.active
@@ -100,7 +98,6 @@ def selected_compositor() -> str:
     )
     output += format_node_type_stats(all_nodes, NODE_PURPOSES)
 
-    # Render Layers nodes (input)
     render_layer_nodes = [n for n in all_nodes if n.type == "R_LAYERS"]
     if render_layer_nodes:
         output += "## Render Layers Input Nodes\n\n"
@@ -122,7 +119,6 @@ def selected_compositor() -> str:
 
         output += "\n"
 
-    # Composite output nodes
     composite_nodes = [n for n in all_nodes if n.type == "COMPOSITE"]
     if composite_nodes:
         output += "## Composite Output Nodes\n\n"
@@ -144,7 +140,6 @@ def selected_compositor() -> str:
 
         output += "\n"
 
-    # Viewer nodes
     viewer_nodes = [n for n in all_nodes if n.type == "VIEWER"]
     if viewer_nodes:
         output += "## Viewer Nodes\n\n"
@@ -163,7 +158,6 @@ def selected_compositor() -> str:
 
         output += "\n"
 
-    # File Output nodes
     file_output_nodes = [n for n in all_nodes if n.type == "OUTPUT_FILE"]
     if file_output_nodes:
         output += "## File Output Nodes\n\n"
@@ -182,11 +176,9 @@ def selected_compositor() -> str:
 
         output += "\n"
 
-    # Active node details
     if active_node:
         output += format_active_node_base(active_node)
 
-        # Compositor-specific active node attributes
         if active_node.type == "BLUR":
             output += f"- **Filter Type**: {active_node.filter_type}\n"
             output += f"- **Use Relative**: {active_node.use_relative}\n"
@@ -228,7 +220,6 @@ def selected_compositor() -> str:
         output += format_active_node_outputs(active_node)
         output += "\n"
 
-    # Other selected nodes
     other_selected = [n for n in selected_nodes if n != active_node]
     if other_selected:
         output += f"## Other Selected Nodes ({len(other_selected)})\n\n"

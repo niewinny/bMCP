@@ -101,7 +101,6 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        # Server Settings Section
         row = layout.row()
         row.prop(self, "network_access")
         if self.network_access:
@@ -119,7 +118,6 @@ class BMCP_Preference(bpy.types.AddonPreferences):
             row = layout.row()
             row.prop(self, "auth_token")
 
-            # Regenerate button
             row.operator("bmcp.regenerate_token", text="", icon="FILE_REFRESH")
 
             if not self.auth_token:
@@ -135,13 +133,11 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "enable_logs")
 
-        # Tab Selection
         layout.separator()
         layout.label(text="Client Configuration", icon="PLUGIN")
         row = layout.row(align=True)
         row.prop(self, "setup_tab", expand=True)
 
-        # Show content based on selected tab
         if self.setup_tab == "STDIO":
             self._draw_stdio_tab(layout)
         elif self.setup_tab == "HTTP":
@@ -152,15 +148,13 @@ class BMCP_Preference(bpy.types.AddonPreferences):
     def _draw_stdio_tab(self, layout):
         """Draw the Stdio configuration tab"""
 
-        # Get paths
         python_exe = sys.executable
         addon_dir = os.path.dirname(__file__)
         wheel_dir = os.path.join(addon_dir, "wheels")
         wheels = glob.glob(os.path.join(wheel_dir, "bmcp-*.whl"))
         wheel_path = wheels[0] if wheels else ""
 
-        # Generate JSON configuration
-        # Use `python -m bmcp.transport.stdio` since the library is installed as a wheel
+        # Uses `python -m bmcp.transport.stdio` since bmcp is installed as a wheel
         args = ["-m", "bmcp.transport.stdio", "--port", str(self.server_port)]
         if self.auth_required and self.auth_token:
             args.extend(["--token", self.auth_token])
@@ -177,13 +171,11 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         }
         config_json = json.dumps(config, indent=2)
 
-        # Display the configuration in a readable format
         col = layout.column(align=True)
         col.scale_y = 0.75
         for line in config_json.split("\n"):
             col.label(text=f"   {line}")
 
-        # Copy button
         row = layout.row()
         row.scale_y = 1.3
         props = row.operator(

@@ -6,7 +6,6 @@ Provides a structured prompt for explaining selected geometry nodes.
 
 from bmcp import prompt
 
-# Valid focus values for the explain_geonodes prompt
 VALID_FOCUS_VALUES = {"all", "inputs", "outputs", "flow", "optimization"}
 
 

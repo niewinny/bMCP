@@ -76,7 +76,6 @@ def selected_geometry_nodes() -> str:
     if not active_obj:
         return "# Geometry Nodes\n\nNo active object selected."
 
-    # Find geometry nodes modifier
     geo_mod = None
     for mod in active_obj.modifiers:
         if mod.type == "NODES":
@@ -100,7 +99,6 @@ def selected_geometry_nodes() -> str:
         SOCKET_PATTERNS,
     )
 
-    # Get all nodes
     all_nodes = list(node_tree.nodes)
     selected_nodes = [n for n in all_nodes if n.select]
     active_node = node_tree.nodes.active
@@ -111,7 +109,6 @@ def selected_geometry_nodes() -> str:
     )
     output += format_node_type_stats(all_nodes, NODE_PURPOSES, limit=15)
 
-    # Group Input/Output nodes
     input_nodes = [n for n in all_nodes if n.type == "GROUP_INPUT"]
     output_nodes = [n for n in all_nodes if n.type == "GROUP_OUTPUT"]
 
@@ -140,7 +137,6 @@ def selected_geometry_nodes() -> str:
                     output += f"  - {inp_socket.name} ({inp_socket.type}): {link_status}\n"
             output += "\n"
 
-    # Active node details
     if active_node:
         output += format_active_node_base(
             active_node, group_label="References Node Group",
@@ -149,7 +145,6 @@ def selected_geometry_nodes() -> str:
         output += format_active_node_outputs(active_node, skip_empty_names=True)
         output += "\n"
 
-    # Other selected nodes
     other_selected = [n for n in selected_nodes if n != active_node]
     if other_selected:
         output += f"## Other Selected Nodes ({len(other_selected)})\n\n"

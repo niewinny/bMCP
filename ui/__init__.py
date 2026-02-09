@@ -39,7 +39,6 @@ def _get_addon_version() -> tuple:
     return (0, 1, 0)  # Fallback
 
 
-# Version from manifest
 ADDON_VERSION = _get_addon_version()
 
 
