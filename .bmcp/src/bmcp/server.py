@@ -24,32 +24,16 @@ from .config import (
 )
 
 # Lifecycle functions and classes are lazily imported to avoid triggering bpy.
-_LAZY_NAMES = frozenset({
-    "start",
-    "stop",
-    "is_running",
-    "is_shutting_down",
-    "wait",
-    "ServerManager",
-    "MCPServer",
+_LAZY_TRANSPORT = frozenset({
+    "start", "stop", "is_running", "is_shutting_down", "wait", "ServerManager",
 })
-
-# Map short names -> actual attribute names in transport.http_server / core
-_TRANSPORT_MAP = {
-    "start": "start_mcp_server",
-    "stop": "stop_mcp_server",
-    "is_running": "is_server_running",
-    "is_shutting_down": "is_server_shutting_down",
-    "wait": "wait_for_shutdown",
-    "ServerManager": "ServerManager",
-}
 
 
 def __getattr__(name):
-    if name in _TRANSPORT_MAP:
+    if name in _LAZY_TRANSPORT:
         import importlib
-        http_server = importlib.import_module(".transport.http_server", "bmcp")
-        return getattr(http_server, _TRANSPORT_MAP[name])
+        mod = importlib.import_module(".transport.http_server", "bmcp")
+        return getattr(mod, name)
     if name == "MCPServer":
         from .core import MCPServer
         return MCPServer

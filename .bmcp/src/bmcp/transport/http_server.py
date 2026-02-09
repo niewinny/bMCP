@@ -710,31 +710,31 @@ def execute_on_main_thread(tool_name: str, arguments: dict) -> dict:
     return _get_server_manager().execute_on_main_thread(tool_name, arguments)
 
 
-def start_mcp_server():
-    """Wrapper function for ServerManager.start"""
+def start():
+    """Start the MCP server."""
     return _get_server_manager().start()
 
 
-def stop_mcp_server():
-    """Wrapper function for ServerManager.stop"""
+def stop():
+    """Stop the MCP server."""
     return _get_server_manager().stop()
 
 
-def is_server_running():
-    """Wrapper function for ServerManager.is_running"""
+def is_running():
+    """Whether the server is currently running."""
     if _server_manager is None:
         return False
     return _server_manager.is_running()
 
 
-def is_server_shutting_down():
-    """Wrapper function for ServerManager.is_shutting_down"""
+def is_shutting_down():
+    """Whether the server is in the process of shutting down."""
     if _server_manager is None:
         return False
     return _server_manager.is_shutting_down()
 
 
-def wait_for_shutdown(timeout=3.0):
+def wait(timeout=3.0):
     """
     Wait for server shutdown to complete.
 
