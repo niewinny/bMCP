@@ -41,7 +41,9 @@ def _get_server_manager():
     if _server_manager is None:
         with _server_manager_lock:
             if _server_manager is None:
-                _server_manager = ServerManager()
+                import importlib
+                mod = importlib.import_module(".transport.http_server", "bmcp")
+                _server_manager = mod.ServerManager()
     return _server_manager
 
 

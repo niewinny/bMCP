@@ -29,7 +29,7 @@ import zipfile
 from pathlib import Path
 
 # Configuration
-BMCP_VERSION = "0.1.0"
+BMCP_VERSION = "1.0.0"
 WHEEL_NAME = f"bmcp-{BMCP_VERSION}-py3-none-any.whl"
 DIST_INFO_DIR = f"bmcp-{BMCP_VERSION}.dist-info"
 

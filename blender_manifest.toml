@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "mcp"
-version = "0.1.0"
+version = "1.0.0"
 name = "bMCP"
 tagline = "AI-powered Blender automation via Model Context Protocol"
 maintainer = "ar"
@@ -23,5 +23,5 @@ permissions.network = "Runs local HTTP server for AI assistant integration"
 
 # Single mega-wheel with all dependencies bundled (including websockets pure-Python)
 wheels = [
-  "./wheels/bmcp-0.1.0-py3-none-any.whl",
+  "./wheels/bmcp-1.0.0-py3-none-any.whl",
 ]
