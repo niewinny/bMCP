@@ -155,11 +155,14 @@ class BMCP_Preference(bpy.types.AddonPreferences):
 
         # Generate JSON configuration
         # Use `python -m bmcp.transport.stdio` since the library is installed as a wheel
+        args = ["-m", "bmcp.transport.stdio", "--port", str(self.server_port)]
+        if self.auth_required and self.auth_token:
+            args.extend(["--token", self.auth_token])
         config = {
             "mcpServers": {
                 "blender": {
                     "command": python_exe,
-                    "args": ["-m", "bmcp.transport.stdio"],
+                    "args": args,
                 }
             }
         }
