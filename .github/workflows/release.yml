@@ -1,0 +1,91 @@
+name: Build release ZIP
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # upload assets & edit release body
+
+jobs:
+  build-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code at the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Build ZIP with single top-level folder (no dotfiles)
+        run: |
+          set -euo pipefail
+
+          # Repo name and cleaned base name for folder/zip
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          BASE_NAME="${REPO_NAME%-master}"
+          BASE_NAME="${BASE_NAME%-main}"
+
+          # Stage to a temp parent so we can zip the folder itself
+          STAGE_ROOT="$(mktemp -d)"
+          STAGE_DIR="$STAGE_ROOT/$BASE_NAME"
+          mkdir -p "$STAGE_DIR"
+
+          # Copy everything EXCEPT dotfiles/dirs anywhere in tree, pyproject.toml, and __pycache__
+          rsync -a \
+            --exclude='.*' \
+            --exclude='pyproject.toml' \
+            --exclude='__pycache__' \
+            "$GITHUB_WORKSPACE"/ "$STAGE_DIR"/
+
+          # Create <BASE_NAME>.zip that contains <BASE_NAME>/ at the root
+          ( cd "$STAGE_ROOT" && zip -r "${BASE_NAME}.zip" "${BASE_NAME}/" )
+
+          echo "BASE_NAME=${BASE_NAME}" >> $GITHUB_ENV
+          echo "ZIP_NAME=${BASE_NAME}.zip" >> $GITHUB_ENV
+          echo "ZIP_PATH=${STAGE_ROOT}/${BASE_NAME}.zip" >> $GITHUB_ENV
+
+      - name: Verify ZIP has top-level folder
+        run: |
+          set -euo pipefail
+          if ! unzip -l "$ZIP_PATH" | awk '{print $4}' | grep -qE "^${BASE_NAME}/"; then
+            echo "ERROR: ZIP does not contain '${BASE_NAME}/' at the root."
+            unzip -l "$ZIP_PATH" || true
+            exit 1
+          fi
+
+      - name: Upload ZIP to this release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_PATH }}
+
+      - name: Add Download button to release body (via gh CLI)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+
+          # Find our asset's browser_download_url
+          ZIP_URL=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            --jq ".assets[] | select(.name==\"${ZIP_NAME}\") | .browser_download_url")
+
+          if [ -z "$ZIP_URL" ]; then
+            echo "Could not locate asset URL for ${ZIP_NAME}"
+            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}"
+            exit 1
+          fi
+
+          # Get release id and current body
+          REL_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.id')
+          CURR_BODY=$(gh api "repos/${GITHUB_REPOSITORY}/releases/${REL_ID}" --jq '.body // ""')
+
+          BANNER=$'[⬇️ Download '"${BASE_NAME}"' version '"${TAG}"']('"${ZIP_URL}"')'
+          if [ -n "${CURR_BODY}" ]; then
+            NEW_BODY=$(printf "%s\n\n%s" "${CURR_BODY}" "${BANNER}")
+          else
+            NEW_BODY="${BANNER}"
+          fi
+
+          # Patch release body
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${REL_ID}" \
+            -f body="${NEW_BODY}"
