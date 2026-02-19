@@ -67,9 +67,9 @@ class BMCPMainMenu(bpy.types.Menu):
         col.scale_y = 0.9
         if server_running:
             col.label(text="Status: Running")
+            col.label(text=f"MCP: http://{display_host}:{port}/mcp")
+            col.label(text=f"SSE: http://{display_host}:{port}/sse")
             if network_access:
-                col.label(text=f"SSE:  http://{display_host}:{port}/sse")
-                col.label(text=f"HTTP: http://{display_host}:{port}/http")
                 warning_col = layout.column(align=True)
                 warning_col.alert = True
                 warning_col.scale_y = 0.8
@@ -78,8 +78,6 @@ class BMCPMainMenu(bpy.types.Menu):
                     text="Network accessible - Code execution from network!"
                 )
             else:
-                col.label(text=f"SSE:  http://{display_host}:{port}/sse")
-                col.label(text=f"HTTP: http://{display_host}:{port}/http")
                 col.label(text="(Localhost only)", icon="LOCKED")
         else:
             col.label(text="Status: Disabled")

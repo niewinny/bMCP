@@ -311,7 +311,7 @@ class ServerManager:
         Returns:
             BackgroundServer: Configured uvicorn server
         """
-        # Create ASGI app with SSE (/sse) and JSON-RPC (/http) endpoints
+        # Create ASGI app with Streamable HTTP (/mcp) endpoint
         app = create_asgi_app(
             mcp,
             bind_address,
@@ -421,8 +421,7 @@ class ServerManager:
     def _log_server_started(self, bind_address, port, network_access):
         """Log server startup information."""
         logger.info("MCP server started")
-        logger.info("SSE endpoint: http://%s:%d/sse", bind_address, port)
-        logger.info("HTTP endpoint: http://%s:%d/http", bind_address, port)
+        logger.info("MCP endpoint: http://%s:%d/mcp", bind_address, port)
 
         if network_access:
             logger.warning(

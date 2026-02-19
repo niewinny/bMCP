@@ -1,19 +1,21 @@
 """
-ASGI Application - Dual-Mode MCP Transport
+ASGI Application — MCP Transport (Streamable HTTP + Legacy SSE)
 
-Creates Starlette ASGI app with SSE and JSON-RPC endpoints for MCP protocol.
-Supports both SSE (with session tracking) and synchronous HTTP transports.
+Endpoints:
+- /mcp          — Streamable HTTP (MCP 2025-11-25): POST + DELETE only
+- /sse          — Legacy SSE transport (backward compat for older clients)
+- /messages     — Legacy POST endpoint (paired with /sse)
+- /health       — Health check (no auth)
+- /debug        — Debug stats (requires auth)
 
-SSE Queue Management:
-- Each SSE connection gets a per-session message queue (configurable size)
-- If client doesn't consume messages fast enough, oldest messages are dropped
-- Clients are notified when messages are dropped via a special event
-- Queue is created on GET /sse and cleaned up on disconnect
-- Background tasks push responses to queue, SSE stream pops and sends
+Session Management:
+- Sessions are created on initialize and tracked as {id: timestamp}
+- Stale sessions are cleaned up periodically
+- Clients must send Mcp-Session-Id header after initialization
 
 Execution Queue:
 - All requests (tools/resources) execute on Blender's main thread via timers
-- Blender processes timers sequentially - natural serialization
+- Blender processes timers sequentially — natural serialization
 - No shared execution queue needed, bpy.app.timers handles scheduling
 
 Shutdown Handling:
@@ -27,220 +29,53 @@ import secrets
 import threading
 import time
 import uuid
-from collections import deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from sse_starlette.sse import EventSourceResponse
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from ..core import MCPServer
 from ..handlers import dispatch_request
 from ..logger import clear_request_id, get_logger, set_request_id
-from ..config import SSE_POLL_INTERVAL, SSE_QUEUE_SIZE
+from ..config import PROTOCOL_VERSION, PROTOCOL_VERSION_LEGACY, SESSION_TIMEOUT, SESSION_CLEANUP_INTERVAL
 
 # Logger for request logging
 request_logger = get_logger("bmcp-requests")
 # Logger for authentication events
 auth_logger = get_logger("bmcp-auth")
 
-# SSE session timeout (30 minutes)
-SSE_SESSION_TIMEOUT: float = 1800.0
-# SSE cleanup interval (5 minutes)
-SSE_CLEANUP_INTERVAL: float = 300.0
-
 # Maximum request body size (10MB) to prevent DoS attacks
 MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
 
 
-async def cancel_background_tasks(app: Starlette) -> int:
-    """Cancel all tracked background tasks (called on shutdown).
-
-    Args:
-        app: Starlette application instance.
-
-    Returns:
-        Number of tasks that were cancelled.
-    """
-    cleanup_task = app.state.cleanup_task
-    sse_queues_lock = app.state.sse_queues_lock
-    background_tasks = app.state.background_tasks
-
-    # Cancel cleanup task first with timeout to prevent hanging
-    if cleanup_task and not cleanup_task.done():
-        cleanup_task.cancel()
-        try:
-            await asyncio.wait_for(cleanup_task, timeout=2.0)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
-            pass
-
-    # Cancel all tracked tasks
-    with sse_queues_lock:
-        count = len(background_tasks)
-        tasks_to_cancel = list(background_tasks)
-
-    for task in tasks_to_cancel:
-        task.cancel()
-
-    # Wait for all to complete
-    if tasks_to_cancel:
-        await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
-
-    with sse_queues_lock:
-        background_tasks.clear()
-    return count
-
-
-async def cleanup_stale_sse_sessions(sse_queues: dict, sse_queues_lock: threading.Lock) -> int:
-    """Remove stale SSE sessions that haven't had activity.
-
-    Args:
-        sse_queues: Dictionary of session_id -> SSEQueue
-        sse_queues_lock: Lock for thread-safe access to sse_queues
-
-    Returns:
-        Number of sessions cleaned up.
-    """
-    now = time.time()
-    with sse_queues_lock:
-        stale_sessions = [
-            session_id
-            for session_id, queue in sse_queues.items()
-            if now - queue.last_activity > SSE_SESSION_TIMEOUT
-        ]
-
-        for session_id in stale_sessions:
-            sse_queues.pop(session_id, None)
-            request_logger.debug("Cleaned up stale SSE session: %s", session_id[:8])
-
-    if stale_sessions:
-        request_logger.info("Cleaned up %d stale SSE sessions", len(stale_sessions))
-
-    return len(stale_sessions)
-
-
-async def _sse_cleanup_loop(sse_queues: dict, sse_queues_lock: threading.Lock) -> None:
-    """Periodic cleanup task for stale SSE sessions."""
+async def _session_cleanup_loop(
+    sessions: dict, sessions_lock: threading.Lock
+) -> None:
+    """Periodic cleanup task for expired sessions."""
     while True:
         try:
-            await asyncio.sleep(SSE_CLEANUP_INTERVAL)
-            await cleanup_stale_sse_sessions(sse_queues, sse_queues_lock)
+            await asyncio.sleep(SESSION_CLEANUP_INTERVAL)
+            now = time.time()
+            with sessions_lock:
+                expired = [
+                    sid
+                    for sid, created in sessions.items()
+                    if now - created > SESSION_TIMEOUT
+                ]
+                for sid in expired:
+                    del sessions[sid]
+            if expired:
+                request_logger.info("Cleaned up %d expired sessions", len(expired))
         except asyncio.CancelledError:
             break
         except Exception as e:
-            request_logger.debug("SSE cleanup error (non-fatal): %s", e)
-
-
-@dataclass
-class SSEQueue:
-    """SSE message queue with drop tracking and event-based notification.
-
-    Thread-safe: All public methods use internal lock for synchronization.
-    Uses loop.call_soon_threadsafe for safe cross-thread event signaling.
-    """
-
-    messages: deque
-    dropped_count: int = 0
-    last_drop_notified: bool = True  # True = no pending notification
-    created_at: float = field(default_factory=time.time)
-    last_activity: float = field(default_factory=time.time)
-    _event: asyncio.Event = field(default_factory=asyncio.Event)
-    _lock: threading.Lock = field(default_factory=threading.Lock)
-    _loop: Optional[asyncio.AbstractEventLoop] = field(default=None)
-
-    def _safe_set_event(self) -> None:
-        """Signal the event in a thread-safe manner."""
-        if self._loop is not None and self._loop.is_running():
-            try:
-                self._loop.call_soon_threadsafe(self._event.set)
-            except RuntimeError:
-                pass
-        else:
-            self._event.set()
-
-    def append(self, message: dict) -> bool:
-        """
-        Append a message to the queue and signal waiting consumers.
-        Returns True if message was added, False if dropped.
-        Thread-safe.
-        """
-        with self._lock:
-            self.last_activity = time.time()
-            if (
-                self.messages.maxlen is not None
-                and len(self.messages) >= self.messages.maxlen
-            ):
-                # Queue is full - oldest message will be dropped
-                self.dropped_count += 1
-                self.last_drop_notified = False
-                self.messages.append(message)
-                self._safe_set_event()
-                return False
-            self.messages.append(message)
-            self._safe_set_event()
-            return True
-
-    def popleft(self) -> Optional[dict]:
-        """Pop the oldest message from the queue. Thread-safe."""
-        with self._lock:
-            if self.messages:
-                return self.messages.popleft()
-            return None
-
-    async def wait_for_message(self, timeout: float = SSE_POLL_INTERVAL) -> bool:
-        """
-        Wait for a message to be available (event-based, not polling).
-
-        Args:
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            True if a message is available, False if timeout occurred
-        """
-        try:
-            await asyncio.wait_for(self._event.wait(), timeout=timeout)
-            self._event.clear()
-            return True
-        except asyncio.TimeoutError:
-            return False
-
-    def get_drop_notification(self) -> Optional[dict]:
-        """
-        Get a drop notification if messages were dropped since last check.
-        Returns None if no notification needed. Thread-safe.
-        """
-        with self._lock:
-            if not self.last_drop_notified and self.dropped_count > 0:
-                self.last_drop_notified = True
-                count = self.dropped_count
-                self.dropped_count = 0
-                return {
-                    "event": "warning",
-                    "data": json.dumps(
-                        {
-                            "type": "messages_dropped",
-                            "count": count,
-                            "message": f"{count} message(s) were dropped due to slow consumption. "
-                            f"Consider processing messages faster or increasing SSE_QUEUE_SIZE.",
-                        }
-                    ),
-                }
-            return None
-
-    def __len__(self):
-        with self._lock:
-            return len(self.messages)
-
-    def __bool__(self):
-        with self._lock:
-            return bool(self.messages)
+            request_logger.debug("Session cleanup error (non-fatal): %s", e)
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
@@ -311,7 +146,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     Checks for token in:
     1. Authorization header: 'Bearer <token>' (preferred, secure)
-    2. Query parameter: '?token=<token>' (fallback for SSE/EventSource, localhost only)
+    2. Query parameter: '?token=<token>' (fallback, localhost only)
     """
 
     def __init__(
@@ -438,8 +273,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 
 async def health_endpoint(request: Request):
-    """Health check endpoint - no auth required for monitoring tools."""
-    mcp_server = request.app.state.mcp_server
+    """Health check endpoint — no auth required for monitoring tools."""
     start_time = getattr(request.app.state, "start_time", time.time())
 
     return JSONResponse(
@@ -451,9 +285,9 @@ async def health_endpoint(request: Request):
 
 
 async def debug_endpoint(request: Request):
-    """Debug endpoint with detailed server stats - requires auth."""
+    """Debug endpoint with detailed server stats — requires auth."""
     mcp_server = request.app.state.mcp_server
-    sse_queues = request.app.state.sse_queues
+    sessions = request.app.state.sessions
     start_time = getattr(request.app.state, "start_time", time.time())
     stats = getattr(request.app.state, "stats", {})
 
@@ -461,7 +295,7 @@ async def debug_endpoint(request: Request):
         {
             "status": "healthy",
             "uptime_seconds": round(time.time() - start_time, 2),
-            "connections": {"active_sse_sessions": len(sse_queues)},
+            "connections": {"active_sessions": len(sessions)},
             "statistics": {
                 "total_requests": stats.get("request_count", 0),
                 "error_count": stats.get("error_count", 0),
@@ -469,6 +303,7 @@ async def debug_endpoint(request: Request):
             "server": {
                 "name": mcp_server.name,
                 "version": "1.0.0",
+                "protocol_version": PROTOCOL_VERSION,
                 "tools_count": mcp_server.tool_count,
                 "resources_count": mcp_server.resource_count,
             },
@@ -476,129 +311,69 @@ async def debug_endpoint(request: Request):
     )
 
 
-async def sse_endpoint(request: Request):
-    """SSE endpoint for MCP-over-SSE transport (/sse)."""
+async def mcp_endpoint(request: Request):
+    """
+    Streamable HTTP endpoint for MCP protocol 2025-11-25.
+
+    Handles POST (main JSON-RPC handler) and DELETE (session termination).
+    """
     mcp_server = request.app.state.mcp_server
-    sse_queues = request.app.state.sse_queues
-    sse_queues_lock = request.app.state.sse_queues_lock
-    background_tasks = request.app.state.background_tasks
+    sessions = request.app.state.sessions
+    sessions_lock = request.app.state.sessions_lock
 
-    if request.method == "POST":
-        try:
-            data = await request.json()
-            method = data.get("method")
-            params = data.get("params")
-            msg_id = data.get("id")
-
-            session_id = request.headers.get("X-MCP-Session-ID")
-
-            with sse_queues_lock:
-                has_session = session_id and session_id in sse_queues
-            if has_session:
-                async def process_and_queue():
-                    try:
-                        result = await dispatch_request(mcp_server, method, params)
-                        response = {"jsonrpc": "2.0", "id": msg_id, "result": result}
-                    except Exception as e:
-                        response = {
-                            "jsonrpc": "2.0",
-                            "id": msg_id,
-                            "error": {"code": -32603, "message": str(e)},
-                        }
-
-                    with sse_queues_lock:
-                        queue = sse_queues.get(session_id)
-                    if queue:
-                        try:
-                            queue.append(response)
-                        except AttributeError:
-                            pass
-
-                task = asyncio.create_task(process_and_queue())
-                with sse_queues_lock:
-                    background_tasks.add(task)
-                task.add_done_callback(lambda t: background_tasks.discard(t))
-
-                return Response(status_code=202)
-            else:
-                try:
-                    result = await dispatch_request(mcp_server, method, params)
-                    return JSONResponse(
-                        {"jsonrpc": "2.0", "id": msg_id, "result": result}
-                    )
-                except Exception as e:
-                    return JSONResponse(
-                        {
-                            "jsonrpc": "2.0",
-                            "id": msg_id,
-                            "error": {"code": -32603, "message": str(e)},
-                        }
-                    )
-
-        except Exception as e:
+    # --- DELETE: terminate session ---
+    if request.method == "DELETE":
+        session_id = request.headers.get("mcp-session-id")
+        if not session_id:
             return JSONResponse(
                 {
                     "jsonrpc": "2.0",
                     "id": None,
-                    "error": {"code": -32700, "message": f"Parse error: {str(e)}"},
+                    "error": {
+                        "code": -32600,
+                        "message": "Missing Mcp-Session-Id header",
+                    },
                 },
                 status_code=400,
             )
-
-    async def event_generator():
-        """Generate SSE events for server-to-client messages."""
-        session_id = str(uuid.uuid4())
-
-        message_queue = SSEQueue(
-            messages=deque(maxlen=SSE_QUEUE_SIZE),
-            _loop=asyncio.get_running_loop(),
+        with sessions_lock:
+            removed = sessions.pop(session_id, None)
+        if removed is not None:
+            request_logger.debug("Session terminated: %s", session_id[:8])
+            return Response(status_code=200)
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32600, "message": "Unknown session"},
+            },
+            status_code=404,
         )
-        with sse_queues_lock:
-            sse_queues[session_id] = message_queue
 
-        try:
-            yield {"event": "session", "data": json.dumps({"sessionId": session_id})}
-            yield {"event": "endpoint", "data": json.dumps({"type": "mcp_endpoint"})}
-
-            while True:
-                drop_notification = message_queue.get_drop_notification()
-                if drop_notification:
-                    yield drop_notification
-
-                while True:
-                    response = message_queue.popleft()
-                    if response:
-                        yield {"event": "message", "data": json.dumps(response)}
-                    else:
-                        break
-
-                has_message = await message_queue.wait_for_message(
-                    timeout=SSE_POLL_INTERVAL
-                )
-                if not has_message:
-                    yield {"event": "ping", "data": ""}
-
-        except asyncio.CancelledError:
-            pass
-        finally:
-            with sse_queues_lock:
-                sse_queues.pop(session_id, None)
-
-    return EventSourceResponse(event_generator())
-
-
-async def rpc_endpoint(request: Request):
-    """JSON-RPC endpoint for plain HTTP transport (/http)."""
-    mcp_server = request.app.state.mcp_server
-
+    # --- POST: main JSON-RPC handler ---
     try:
-        data = await request.json()
+        body = await request.body()
+        data = json.loads(body)
     except Exception as e:
         return JSONResponse(
             {
                 "jsonrpc": "2.0",
                 "id": None,
-                "error": {"code": -32700, "message": f"Parse error: {str(e)}"},
+                "error": {"code": -32700, "message": f"Parse error: {e}"},
+            },
+            status_code=400,
+        )
+
+    # Reject batch requests (arrays)
+    if isinstance(data, list):
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {
+                    "code": -32600,
+                    "message": "Batch requests are not supported",
+                },
             },
             status_code=400,
         )
@@ -607,6 +382,7 @@ async def rpc_endpoint(request: Request):
     params = data.get("params")
     msg_id = data.get("id")
     jsonrpc_version = data.get("jsonrpc", "2.0")
+    is_notification = msg_id is None
 
     if not method:
         return JSONResponse(
@@ -620,41 +396,281 @@ async def rpc_endpoint(request: Request):
             }
         )
 
-    is_notification = msg_id is None
+    # --- Initialize: create session ---
+    if method == "initialize":
+        try:
+            result = await dispatch_request(mcp_server, method, params)
 
+            session_id = str(uuid.uuid4())
+            with sessions_lock:
+                sessions[session_id] = time.time()
+            request_logger.debug("New session: %s", session_id[:8])
+            return JSONResponse(
+                {"jsonrpc": jsonrpc_version, "id": msg_id, "result": result},
+                headers={"Mcp-Session-Id": session_id},
+            )
+        except Exception as e:
+            return JSONResponse(
+                {
+                    "jsonrpc": jsonrpc_version,
+                    "id": msg_id,
+                    "error": {"code": -32603, "message": f"Internal error: {e}"},
+                }
+            )
+
+    # --- All other methods: validate session ---
+    # (Notifications have no id — never return error responses for them,
+    #  per JSON-RPC spec. Accept them silently to avoid "id: null" responses
+    #  that break strict Zod validators like Claude Desktop's.)
+    session_id = request.headers.get("mcp-session-id")
+    if not session_id:
+        if is_notification:
+            return Response(status_code=202)
+        return JSONResponse(
+            {
+                "jsonrpc": jsonrpc_version,
+                "id": msg_id,
+                "error": {
+                    "code": -32600,
+                    "message": "Missing Mcp-Session-Id header. Call initialize first.",
+                },
+            },
+            status_code=400,
+        )
+
+    with sessions_lock:
+        valid_session = session_id in sessions
+        if valid_session:
+            sessions[session_id] = time.time()
+    if not valid_session:
+        if is_notification:
+            return Response(status_code=202)
+        return JSONResponse(
+            {
+                "jsonrpc": jsonrpc_version,
+                "id": msg_id,
+                "error": {
+                    "code": -32600,
+                    "message": "Invalid or expired session. Call initialize again.",
+                },
+            },
+            status_code=404,
+        )
+
+    # Dispatch
     try:
         result = await dispatch_request(mcp_server, method, params)
 
         if is_notification:
-            return Response(status_code=204)
+            return Response(status_code=202)
 
         return JSONResponse(
             {"jsonrpc": jsonrpc_version, "id": msg_id, "result": result}
         )
 
     except ValueError as e:
+        error_code = getattr(e, "code", -32602)
         if is_notification:
-            return Response(status_code=204)
-
+            return Response(status_code=202)
         return JSONResponse(
             {
                 "jsonrpc": jsonrpc_version,
                 "id": msg_id,
-                "error": {"code": -32602, "message": f"Invalid params: {str(e)}"},
+                "error": {"code": error_code, "message": str(e)},
             }
         )
 
     except Exception as e:
         if is_notification:
-            return Response(status_code=204)
-
+            return Response(status_code=202)
         return JSONResponse(
             {
                 "jsonrpc": jsonrpc_version,
                 "id": msg_id,
-                "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
+                "error": {"code": -32603, "message": f"Internal error: {e}"},
             }
         )
+
+
+async def sse_endpoint(request: Request):
+    """
+    Legacy SSE endpoint for backward compatibility with pre-2025-11-25 MCP clients.
+
+    Opens an SSE stream and sends an `endpoint` event telling the client
+    where to POST JSON-RPC messages. Responses are pushed back through
+    this SSE stream as `message` events.
+    """
+    sse_queues = request.app.state.sse_queues
+    sse_queues_lock = request.app.state.sse_queues_lock
+
+    session_id = str(uuid.uuid4())
+    queue: asyncio.Queue = asyncio.Queue()
+
+    with sse_queues_lock:
+        sse_queues[session_id] = queue
+
+    request_logger.debug("SSE connection opened: %s", session_id[:8])
+
+    async def event_generator():
+        try:
+            # Tell the client where to POST messages
+            yield f"event: endpoint\ndata: /messages?sessionId={session_id}\n\n"
+
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"event: message\ndata: {json.dumps(message)}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive comment to prevent connection timeout
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            with sse_queues_lock:
+                sse_queues.pop(session_id, None)
+            sessions_lock = request.app.state.sessions_lock
+            sessions = request.app.state.sessions
+            with sessions_lock:
+                sessions.pop(session_id, None)
+            request_logger.debug("SSE connection closed: %s", session_id[:8])
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def messages_endpoint(request: Request):
+    """
+    Legacy messages endpoint for SSE transport.
+
+    Receives JSON-RPC POSTs and pushes responses through the paired SSE stream.
+    """
+    mcp_server = request.app.state.mcp_server
+    sessions = request.app.state.sessions
+    sessions_lock = request.app.state.sessions_lock
+    sse_queues = request.app.state.sse_queues
+    sse_queues_lock = request.app.state.sse_queues_lock
+
+    session_id = request.query_params.get("sessionId")
+    if not session_id:
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {
+                    "code": -32600,
+                    "message": "Missing sessionId query parameter",
+                },
+            },
+            status_code=400,
+        )
+
+    with sse_queues_lock:
+        queue = sse_queues.get(session_id)
+
+    if queue is None:
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {
+                    "code": -32600,
+                    "message": "Unknown or expired SSE session",
+                },
+            },
+            status_code=404,
+        )
+
+    try:
+        body = await request.body()
+        data = json.loads(body)
+    except Exception as e:
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {"code": -32700, "message": f"Parse error: {e}"},
+            },
+            status_code=400,
+        )
+
+    if isinstance(data, list):
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {
+                    "code": -32600,
+                    "message": "Batch requests are not supported",
+                },
+            },
+            status_code=400,
+        )
+
+    method = data.get("method")
+    params = data.get("params")
+    msg_id = data.get("id")
+    jsonrpc_version = data.get("jsonrpc", "2.0")
+    is_notification = msg_id is None
+
+    if not method:
+        return JSONResponse(
+            {
+                "jsonrpc": jsonrpc_version,
+                "id": msg_id,
+                "error": {
+                    "code": -32600,
+                    "message": "Invalid Request: method is required",
+                },
+            }
+        )
+
+    # Register session on initialize
+    if method == "initialize":
+        with sessions_lock:
+            sessions[session_id] = time.time()
+
+    try:
+        result = await dispatch_request(mcp_server, method, params)
+
+        # SSE transport is always legacy — force protocol version regardless
+        # of what the client requests (e.g. LM Studio sends 2025-11-25 but
+        # its SSE client only supports 2024-11-05)
+        if method == "initialize" and isinstance(result, dict):
+            result["protocolVersion"] = PROTOCOL_VERSION_LEGACY
+
+        if not is_notification:
+            response = {"jsonrpc": jsonrpc_version, "id": msg_id, "result": result}
+            await queue.put(response)
+
+        return Response(status_code=202)
+
+    except ValueError as e:
+        error_code = getattr(e, "code", -32602)
+        if not is_notification:
+            response = {
+                "jsonrpc": jsonrpc_version,
+                "id": msg_id,
+                "error": {"code": error_code, "message": str(e)},
+            }
+            await queue.put(response)
+        return Response(status_code=202)
+
+    except Exception as e:
+        if not is_notification:
+            response = {
+                "jsonrpc": jsonrpc_version,
+                "id": msg_id,
+                "error": {"code": -32603, "message": f"Internal error: {e}"},
+            }
+            await queue.put(response)
+        return Response(status_code=202)
 
 
 def create_asgi_app(
@@ -680,9 +696,6 @@ def create_asgi_app(
         Starlette: ASGI application
     """
     if host == "0.0.0.0":
-        # Network mode: allow all origins but WITHOUT credentials to prevent
-        # cross-site attacks. Auth uses Bearer tokens (not cookies), so
-        # allow_credentials is not needed.
         allowed_origins = ["*"]
         allow_credentials = False
     else:
@@ -697,8 +710,8 @@ def create_asgi_app(
     @asynccontextmanager
     async def lifespan(app: Starlette):
         # Initialize mutable state on app.state
-        app.state.background_tasks = set()
-        app.state.cleanup_task = None
+        app.state.sessions_lock = threading.Lock()
+        app.state.sessions = {}
         app.state.sse_queues_lock = threading.Lock()
         app.state.sse_queues = {}
         app.state.start_time = time.time()
@@ -706,31 +719,35 @@ def create_asgi_app(
         app.state.mcp_server = mcp_server
         app.state.is_shutting_down = is_shutting_down_fn or (lambda: False)
 
-        # Start cleanup task
-        app.state.cleanup_task = asyncio.create_task(
-            _sse_cleanup_loop(app.state.sse_queues, app.state.sse_queues_lock)
+        # Start session cleanup task
+        cleanup_task = asyncio.create_task(
+            _session_cleanup_loop(app.state.sessions, app.state.sessions_lock)
         )
-        request_logger.debug("Started SSE session cleanup task")
+        request_logger.debug("Started session cleanup task")
 
         yield
 
         # Shutdown
-        count = await cancel_background_tasks(app)
-        if count > 0:
-            request_logger.debug("Cancelled %d background tasks on shutdown", count)
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
     app = Starlette(
         routes=[
             Route("/health", health_endpoint, methods=["GET"]),
             Route("/debug", debug_endpoint, methods=["GET"]),
-            Route("/sse", sse_endpoint, methods=["GET", "POST"]),
-            Route("/http", rpc_endpoint, methods=["POST"]),
+            Route("/mcp", mcp_endpoint, methods=["POST", "DELETE"]),
+            # Legacy SSE transport (backward compat for older MCP clients)
+            Route("/sse", sse_endpoint, methods=["GET"]),
+            Route("/messages", messages_endpoint, methods=["POST"]),
         ],
         middleware=[
             Middleware(
                 CORSMiddleware,
                 allow_origins=allowed_origins,
-                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
                 allow_headers=["*"],
                 allow_credentials=allow_credentials,
             ),

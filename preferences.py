@@ -6,9 +6,9 @@ import string
 import sys
 
 import bpy
+from bmcp.server import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_PORT
 
 from . import __package__ as base_package
-from bmcp.server import DEFAULT_AUTH_TOKEN_LENGTH, DEFAULT_PORT
 
 # Flag to prevent recursive preference updates
 _updating_preferences = False
@@ -57,7 +57,7 @@ class BMCP_Preference(bpy.types.AddonPreferences):
 
     auth_token: bpy.props.StringProperty(
         name="Authentication Token",
-        description="Secure token required for all HTTP/SSE connections. Clients must provide this via 'Authorization: Bearer <token>' header or '?token=<token>' query parameter",
+        description="Secure token required for all connections. Clients must provide this via 'Authorization: Bearer <token>' header or '?token=<token>' query parameter",
         default="",
         subtype="PASSWORD",
     )
@@ -87,11 +87,11 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         name="Setup Tab",
         description="Select which transport configuration to view",
         items=[
-            ("STDIO", "Stdio", "For Claude Desktop (stdio bridge)", "CONSOLE", 0),
-            ("HTTP", "HTTP", "For sync clients (LM Studio)", "NETWORK_DRIVE", 1),
-            ("SSE", "SSE", "For streaming clients (Claude Code, Cursor)", "LIGHT", 2),
+            ("HTTP", "Streamable HTTP", "For Claude Code, Cursor, Windsurf", "WORLD", 0),
+            ("SSE", "SSE", "For LM Studio and legacy MCP clients", "URL_DATA", 1),
+            ("STDIO", "Stdio", "For Claude Desktop (stdio bridge)", "CONSOLE", 2),
         ],
-        default="STDIO",
+        default="HTTP",
     )
 
     def draw(self, context):
@@ -138,12 +138,12 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         row = layout.row(align=True)
         row.prop(self, "setup_tab", expand=True)
 
-        if self.setup_tab == "STDIO":
-            self._draw_stdio_tab(layout)
-        elif self.setup_tab == "HTTP":
+        if self.setup_tab == "HTTP":
             self._draw_http_tab(layout)
         elif self.setup_tab == "SSE":
             self._draw_sse_tab(layout)
+        elif self.setup_tab == "STDIO":
+            self._draw_stdio_tab(layout)
 
     def _draw_stdio_tab(self, layout):
         """Draw the Stdio configuration tab"""
@@ -209,12 +209,13 @@ class BMCP_Preference(bpy.types.AddonPreferences):
         props.config_type = config_type
 
     def _draw_http_tab(self, layout):
-        """Draw the HTTP configuration tab"""
-        self._draw_endpoint_tab(layout, "http", "HTTP")
+        """Draw the Streamable HTTP configuration tab"""
+        self._draw_endpoint_tab(layout, "mcp", "HTTP")
 
     def _draw_sse_tab(self, layout):
-        """Draw the SSE configuration tab (for streaming clients)"""
+        """Draw the legacy SSE configuration tab"""
         self._draw_endpoint_tab(layout, "sse", "SSE")
+
 
 
 class BMCP_OT_CopyConfig(bpy.types.Operator):

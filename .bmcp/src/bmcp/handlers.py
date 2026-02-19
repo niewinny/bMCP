@@ -2,14 +2,14 @@
 MCP Protocol Handlers
 
 Implements JSON-RPC handlers for all MCP protocol methods.
-Used by both SSE (/sse) and stdio/plain HTTP (/http) transports.
+Used by the Streamable HTTP (/mcp) and stdio transports.
 """
 
 import traceback
 from typing import Any, Optional
 
 from .logger import RequestTimer, get_logger
-from .config import OUTPUT_LIMIT
+from .config import OUTPUT_LIMIT, PROTOCOL_VERSION
 
 # Get logger for this module
 logger = get_logger("bmcp-handlers")
@@ -27,29 +27,26 @@ async def handle_initialize(mcp_server, params: dict) -> dict:
         dict: Server capabilities and metadata
     """
     client_protocol = params.get("protocolVersion", "unknown")
-
-    # Use the protocol version the client requested (if we support it)
-    # Both 2024-11-05 and 2025-06-18 are compatible with our implementation
-    supported_versions = ["2024-11-05", "2025-06-18"]
-    protocol_version = (
-        client_protocol if client_protocol in supported_versions else "2024-11-05"
-    )
-
-    logger.info("Initialize: client=%s, using=%s", client_protocol, protocol_version)
+    logger.info("Initialize: client=%s, server=%s", client_protocol, PROTOCOL_VERSION)
 
     return {
-        "protocolVersion": protocol_version,
-        "serverInfo": {"name": mcp_server.name, "version": "1.0.0"},
+        "protocolVersion": PROTOCOL_VERSION,
+        "serverInfo": {
+            "name": mcp_server.name,
+            "title": "Blender bMCP",
+            "version": "1.0.0",
+        },
+        "instructions": "Blender MCP server providing tools for executing Python code in Blender, reading scene data, and explaining geometry nodes.",
         "capabilities": {
             "tools": {
-                "listChanged": False,  # We don't send notifications when tools change
+                "listChanged": False,
             },
             "resources": {
-                "subscribe": False,  # Resource subscription not supported
-                "listChanged": False,  # We don't send notifications when resources change
+                "subscribe": False,
+                "listChanged": False,
             },
             "prompts": {
-                "listChanged": False,  # Dynamic prompt updates not supported
+                "listChanged": False,
             },
         },
     }
@@ -155,14 +152,11 @@ async def handle_resources_list(mcp_server, params: Optional[dict] = None) -> di
         params: Optional parameters (not used)
 
     Returns:
-        dict: List of resources and resource templates (per MCP spec)
+        dict: List of resources
     """
     resources = mcp_server.list_resources()
     logger.debug("resources/list: returning %d resources", len(resources))
-    return {
-        "resources": resources,
-        "resourceTemplates": [],  # Required by MCP spec, even if empty
-    }
+    return {"resources": resources}
 
 
 async def handle_resources_read(mcp_server, params: dict) -> dict:
@@ -284,6 +278,20 @@ async def handle_notifications_initialized(
     return None
 
 
+async def handle_ping(mcp_server, params: Optional[dict] = None) -> dict:
+    """
+    Handle ping request — returns empty object per MCP spec.
+
+    Args:
+        mcp_server: MCPServer instance
+        params: Optional parameters (not used)
+
+    Returns:
+        dict: Empty object
+    """
+    return {}
+
+
 async def handle_notifications_cancelled(
     mcp_server, params: Optional[dict] = None
 ) -> None:
@@ -307,6 +315,7 @@ async def handle_notifications_cancelled(
 # Mapping of MCP methods to handlers
 METHOD_HANDLERS = {
     "initialize": handle_initialize,
+    "ping": handle_ping,
     "tools/list": handle_tools_list,
     "tools/call": handle_tools_call,
     "resources/list": handle_resources_list,
@@ -340,7 +349,9 @@ async def dispatch_request(
 
     if method not in METHOD_HANDLERS:
         logger.warning("Unknown method: %s", method)
-        raise ValueError(f"Method '{method}' not supported")
+        err = ValueError(f"Method not found: {method}")
+        err.code = -32601
+        raise err
 
     handler = METHOD_HANDLERS[method]
 

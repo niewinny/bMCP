@@ -26,7 +26,6 @@ SHUTDOWN_TIMEOUT: float = 1.5  # Graceful shutdown wait
 
 # Queue limits
 MAX_PENDING_OPS = 50  # Maximum concurrent pending resource operations
-SSE_QUEUE_SIZE = 500  # Maximum messages in SSE queue per session
 
 # Cleanup settings
 STALE_PROPERTY_AGE: float = 300.0  # 5 minutes before properties are considered stale
@@ -35,7 +34,14 @@ OUTPUT_LIMIT: int = 2 * 1024 * 1024  # 2MB output limit
 # Polling intervals (in seconds)
 # Note: These are fallback values - event-based completion is preferred
 RESOURCE_POLL_INTERVAL: float = 0.05  # 50ms polling for resource completion
-SSE_POLL_INTERVAL: float = 0.05  # 50ms polling for SSE queue
+
+# Session management
+SESSION_TIMEOUT: float = 1800.0  # 30 minutes before session expires
+SESSION_CLEANUP_INTERVAL: float = 300.0  # 5 minutes between cleanup sweeps
+
+# Protocol
+PROTOCOL_VERSION = "2025-11-25"
+PROTOCOL_VERSION_LEGACY = "2024-11-05"
 
 # =============================================================================
 # PORT VALIDATION CACHE

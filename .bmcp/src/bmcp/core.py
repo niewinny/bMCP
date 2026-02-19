@@ -72,13 +72,16 @@ class MCPServer:
             first_param = next((p for p in params if p not in ("self", "cls")), None)
             needs_ctx = first_param == "ctx"
 
-            self._tool_cache[tool_name] = {
+            entry = {
                 "handler": reg.handler,
                 "name": tool_name,
                 "description": tool_desc,
                 "inputSchema": schema,
                 "needs_ctx": needs_ctx,  # Cached signature info
             }
+            if getattr(reg, "annotations", None):
+                entry["annotations"] = reg.annotations
+            self._tool_cache[tool_name] = entry
 
     def sync_resources(self):
         """
@@ -94,7 +97,6 @@ class MCPServer:
             resource_name = reg.name or getattr(
                 reg.handler, "__name__", reg.uri.split("/")[-1]
             )
-            resource_name = resource_name.replace("_", " ").title()
             resource_desc = reg.description or (reg.handler.__doc__ or "").strip()
 
             self._resource_cache[reg.uri] = {
@@ -313,13 +315,16 @@ class MCPServer:
         """
         tools = []
         for tool_data in self._tool_cache.values():
-            tools.append(
-                {
-                    "name": tool_data["name"],
-                    "description": tool_data["description"],
-                    "inputSchema": tool_data["inputSchema"],
-                }
-            )
+            name = tool_data["name"]
+            entry = {
+                "name": name,
+                "title": name.replace("_", " ").title(),
+                "description": tool_data["description"],
+                "inputSchema": tool_data["inputSchema"],
+            }
+            if "annotations" in tool_data:
+                entry["annotations"] = tool_data["annotations"]
+            tools.append(entry)
         return tools
 
     def list_resources(self) -> list[dict]:
@@ -331,10 +336,12 @@ class MCPServer:
         """
         resources = []
         for resource_data in self._resource_cache.values():
+            name = resource_data["name"]
             resources.append(
                 {
                     "uri": resource_data["uri"],
-                    "name": resource_data["name"],
+                    "name": name,
+                    "title": name.replace("_", " ").title(),
                     "description": resource_data["description"],
                     "mimeType": resource_data["mimeType"],
                 }

@@ -36,7 +36,6 @@ DIST_INFO_DIR = f"bmcp-{BMCP_VERSION}.dist-info"
 # All dependencies to bundle (with version constraints)
 DEPS = [
     "starlette>=0.50.0",
-    "sse-starlette>=3.0.0",
     "uvicorn>=0.38.0",
     "anyio>=4.0.0",
     "h11>=0.16.0",

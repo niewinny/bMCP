@@ -18,7 +18,7 @@ from .config import (
     STARTUP_TIMEOUT,
     SHUTDOWN_TIMEOUT,
     MAX_PENDING_OPS,
-    SSE_QUEUE_SIZE,
+    PROTOCOL_VERSION,
     # Validation
     validate_port,
     validate_config,
@@ -132,7 +132,7 @@ __all__ = [
     "STARTUP_TIMEOUT",
     "SHUTDOWN_TIMEOUT",
     "MAX_PENDING_OPS",
-    "SSE_QUEUE_SIZE",
+    "PROTOCOL_VERSION",
     # Validation
     "validate_port",
     "validate_config",

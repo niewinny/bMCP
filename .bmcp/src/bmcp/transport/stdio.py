@@ -10,8 +10,9 @@ It implements just enough MCP protocol to act as a transparent bridge.
 
 Architecture:
 - Reads JSON-RPC messages from stdin (newline-delimited)
-- Forwards to JSON-RPC endpoint at http://localhost:12097/http
+- Forwards to Streamable HTTP endpoint at http://localhost:12097/mcp
 - Writes responses back to stdout (newline-delimited)
+- Manages Mcp-Session-Id header lifecycle (capture on init, send on all requests)
 
 Usage:
     python -m bmcp.transport.stdio [--port PORT] [--host HOST]
@@ -43,9 +44,10 @@ if sys.platform == "win32":
 
 DEFAULT_BLENDER_HOST = "127.0.0.1"
 DEFAULT_BLENDER_PORT = 12097
-DEFAULT_BLENDER_PATH = "/http"
+DEFAULT_BLENDER_PATH = "/mcp"
 DEFAULT_TIMEOUT = 300  # 5 minutes for long operations
 MAX_RETRIES = 2  # Retry transient failures
+PROTOCOL_VERSION = "2025-11-25"
 
 logger = logging.getLogger("bmcp-stdio-bridge")
 handler = logging.StreamHandler(sys.stderr)
@@ -86,7 +88,7 @@ class HTTPConnectionPool:
 
     def request(
         self, method: str, path: str, body: bytes, headers: dict
-    ) -> tuple[int, str, bytes]:
+    ) -> tuple[int, str, bytes, dict]:
         """Make an HTTP request, reconnecting if necessary.
 
         Args:
@@ -96,7 +98,7 @@ class HTTPConnectionPool:
             headers: Request headers
 
         Returns:
-            Tuple of (status_code, reason, response_body)
+            Tuple of (status_code, reason, response_body, response_headers)
 
         Raises:
             Exception if request fails after reconnection attempt
@@ -105,7 +107,8 @@ class HTTPConnectionPool:
         try:
             conn.request(method, path, body=body, headers=headers)
             response = conn.getresponse()
-            return response.status, response.reason, response.read()
+            resp_headers = dict(response.getheaders())
+            return response.status, response.reason, response.read(), resp_headers
         except (http.client.HTTPException, ConnectionError, OSError) as e:
             # Connection lost - try to reconnect once
             logger.debug("Connection error, reconnecting: %s", e)
@@ -113,7 +116,8 @@ class HTTPConnectionPool:
             conn = self._get_connection()
             conn.request(method, path, body=body, headers=headers)
             response = conn.getresponse()
-            return response.status, response.reason, response.read()
+            resp_headers = dict(response.getheaders())
+            return response.status, response.reason, response.read(), resp_headers
 
     def close(self) -> None:
         """Close the connection pool."""
@@ -124,14 +128,18 @@ class HTTPConnectionPool:
 _connection_pool: Optional[HTTPConnectionPool] = None
 _connection_pool_lock = threading.Lock()
 
+# Session state for Streamable HTTP
+_session_id: Optional[str] = None
+
 
 def forward_to_blender(
     message: dict, endpoint: str, retries: int = MAX_RETRIES, auth_token: str = ""
 ) -> Optional[dict]:
     """
-    Forward a JSON-RPC message to the HTTP server.
+    Forward a JSON-RPC message to the Streamable HTTP server.
 
     Uses connection pooling for efficiency and retries transient failures.
+    Manages Mcp-Session-Id lifecycle (capture on init, send on all subsequent).
 
     Args:
         message: JSON-RPC message dictionary
@@ -142,7 +150,7 @@ def forward_to_blender(
     Returns:
         JSON-RPC response dictionary (or None for notifications)
     """
-    global _connection_pool
+    global _connection_pool, _session_id
 
     logger.debug("Forwarding to server: %s", message.get("method"))
 
@@ -156,11 +164,17 @@ def forward_to_blender(
     if auth_token:
         headers["Authorization"] = f"Bearer {auth_token}"
 
+    # Add session headers after initialization
+    if _session_id:
+        headers["Mcp-Session-Id"] = _session_id
+        headers["Mcp-Protocol-Version"] = PROTOCOL_VERSION
+
     # Parse endpoint to get path
     parsed = urllib.parse.urlparse(endpoint)
     path = parsed.path or DEFAULT_BLENDER_PATH
 
     last_error = None
+    method = message.get("method")
 
     for attempt in range(retries + 1):
         try:
@@ -168,13 +182,28 @@ def forward_to_blender(
             with _connection_pool_lock:
                 pool = _connection_pool
             if pool:
-                status, reason, response_data = pool.request(
+                status, reason, response_data, resp_headers = pool.request(
                     "POST", path, data, headers
                 )
 
+                # Capture session ID from initialize response
+                # (case-insensitive lookup — Starlette lowercases headers)
+                if method == "initialize":
+                    for key, value in resp_headers.items():
+                        if key.lower() == "mcp-session-id":
+                            _session_id = value
+                            logger.debug("Captured session ID: %s", _session_id[:8])
+                            break
+
+                if status == 202:
+                    logger.debug(
+                        "Received 202 Accepted for: %s", method
+                    )
+                    return None
+
                 if status == 204:
                     logger.debug(
-                        "Received 204 No Content for: %s", message.get("method")
+                        "Received 204 No Content for: %s", method
                     )
                     return None
 
@@ -194,7 +223,7 @@ def forward_to_blender(
                     }
 
                 result = json.loads(response_data.decode("utf-8"))
-                logger.debug("Received response for: %s", message.get("method"))
+                logger.debug("Received response for: %s", method)
                 return result
 
             else:
@@ -202,7 +231,12 @@ def forward_to_blender(
                     endpoint, data=data, headers=headers, method="POST"
                 )
                 with urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT) as response:
-                    if response.status == 204:
+                    # Capture session ID before checking status
+                    if method == "initialize":
+                        sid = response.headers.get("Mcp-Session-Id")
+                        if sid:
+                            _session_id = sid
+                    if response.status in (202, 204):
                         return None
                     response_data = response.read().decode("utf-8")
                     return json.loads(response_data)
