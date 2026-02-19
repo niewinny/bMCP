@@ -13,56 +13,33 @@ Control Blender through AI using the Model Context Protocol (MCP).
 
 ## Setup
 
-1. Install the bMCP extension in Blender
+1. Install the bMCP extension in Blender (4.2+)
 2. Open **Blender Preferences → Add-ons → bMCP**
-3. Choose your configuration:
-   - **Stdio**
-   - **HTTP**
-4. Click **"Copy Configuration"**
-5. Add to your client's config file (see client documentation)
-6. Restart your client
-7. Start the server: **Blender → bMCP menu → Start Server**
+3. Choose your transport tab and click **"Copy Configuration"**
+4. Paste into your client's MCP config file
+5. Start the server: **Blender → MCP menu → Start Server**
 
 ## Transport Options
 
-The addon supports three transport types. Choose based on your MCP client:
+### Streamable HTTP (Recommended)
 
-### 1. Stdio (Claude Desktop)
-
-For CLI-based MCP clients that use stdin/stdout.
+Single endpoint using the MCP `2025-11-25` protocol. Works with most modern MCP clients.
 
 ```json
 {
   "mcpServers": {
     "blender": {
-      "command": "/path/to/blender/python",
-      "args": ["-m", "bmcp.transport.stdio"]
+      "url": "http://localhost:12097/mcp"
     }
   }
 }
 ```
 
-**Use with:** Claude Desktop
+**Use with:** Claude Code, Cursor, Windsurf
 
-### 2. HTTP (LM Studio)
+### SSE (Legacy)
 
-For clients that use simple HTTP request-response (synchronous JSON-RPC).
-
-```json
-{
-  "mcpServers": {
-    "blender": {
-      "url": "http://localhost:12097/http"
-    }
-  }
-}
-```
-
-**Use with:** LM Studio, simple HTTP clients
-
-### 3. SSE (Claude Code, Cursor)
-
-For clients that support Server-Sent Events (streaming responses).
+For older MCP clients that only support Server-Sent Events.
 
 ```json
 {
@@ -74,17 +51,35 @@ For clients that support Server-Sent Events (streaming responses).
 }
 ```
 
-**Use with:** Claude Code, Cursor, any SSE-capable client
+**Use with:** LM Studio, legacy MCP clients
 
-## Key Imports
+### Stdio
 
-```python
-# Decorators — register tools, resources, and prompts
-from bmcp import tool, resource, prompt
+Bridges stdin/stdout clients to the HTTP server using Blender's bundled Python.
 
-# Server lifecycle and configuration
-from bmcp.server import start, stop, is_running, DEFAULT_PORT
+```json
+{
+  "mcpServers": {
+    "blender": {
+      "command": "/path/to/blender/python",
+      "args": ["-m", "bmcp.transport.stdio", "--port", "12097"],
+      "env": {
+        "PYTHONPATH": "/path/to/bmcp/wheels/bmcp-1.0.0-py3-none-any.whl"
+      }
+    }
+  }
+}
 ```
+
+The exact paths are filled in automatically when you use **Copy Configuration** in the addon preferences.
+
+**Use with:** Claude Desktop
+
+## Security
+
+- **Localhost only** by default — only `127.0.0.1` connections accepted
+- Optional **authentication token** (Bearer header) for all connections
+- **Network access** can be enabled in preferences, which forces auth on and binds to `0.0.0.0`
 
 ## License
 
